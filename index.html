@@ -1,0 +1,1825 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0d6b70">
+<meta name="author" content="MPE Ali Eid">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/icon-32.png">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cumulative DVH">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>Adaptive Cumulative DVH</title>
+<meta name="description" content="MR-Linac adaptive cumulative DVH evaluation. Designed by MPE Ali Eid.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: a single working column — load strip, checks, verdict row, results table, DVH plot, mapping, method. Instrument-panel feel, slate neutrals with a deep teal accent. */
+:root{
+  --bg:#f4f6f7; --panel:#ffffff; --panel-2:#eef2f3; --line:#d5dde0; --ink:#121a1d; --ink-2:#4a585e; --ink-3:#77868c;
+  --accent:#0d6b70; --accent-ink:#ffffff; --accent-soft:#d8ecec;
+  --pass:#1d7a3a; --pass-bg:#e1f2e6; --minor:#9a6200; --minor-bg:#fbefd4; --fail:#b42727; --fail-bg:#f9e0df; --na:#77868c;
+  --s-ref:#121a1d; --s-cum:#2a78d6; --s-rig:#eb6834; --s-def:#1baf7a; --s-fx:#9aa8ad;
+  --f-display:"IBM Plex Sans Condensed","Arial Narrow",system-ui,sans-serif;
+  --f-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,"Cascadia Mono",Consolas,monospace;
+  --r:6px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f1517; --panel:#172023; --panel-2:#1d282c; --line:#2c3a3f; --ink:#e8eef0; --ink-2:#a9b7bc; --ink-3:#7d8d93;
+  --accent:#4fb3b6; --accent-ink:#06191a; --accent-soft:#183a3c;
+  --pass:#5cc47c; --pass-bg:#16301f; --minor:#e3a73a; --minor-bg:#33270f; --fail:#f07a78; --fail-bg:#3a1a1a; --na:#7d8d93;
+  --s-ref:#e8eef0; --s-cum:#3987e5; --s-rig:#d95926; --s-def:#199e70; --s-fx:#5b6a70; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f1517; --panel:#172023; --panel-2:#1d282c; --line:#2c3a3f; --ink:#e8eef0; --ink-2:#a9b7bc; --ink-3:#7d8d93;
+  --accent:#4fb3b6; --accent-ink:#06191a; --accent-soft:#183a3c;
+  --pass:#5cc47c; --pass-bg:#16301f; --minor:#e3a73a; --minor-bg:#33270f; --fail:#f07a78; --fail-bg:#3a1a1a; --na:#7d8d93;
+  --s-ref:#e8eef0; --s-cum:#3987e5; --s-rig:#d95926; --s-def:#199e70; --s-fx:#5b6a70; color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font:15px/1.5 var(--f-body);margin:0}
+.wrap{max-width:1280px;margin:0 auto;padding-block:0 48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+header.top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px 24px;padding-block:28px 18px;border-bottom:1px solid var(--line)}
+.brand h1{font:700 clamp(26px,4vw,36px)/1.05 var(--f-display);letter-spacing:-.01em;margin:0;text-wrap:balance}
+.brand .sub{color:var(--ink-2);margin-top:6px;font-size:14px}
+.brand .sub b{font-family:var(--f-mono);font-weight:500;color:var(--ink)}
+.credit{font:600 13px var(--f-display);letter-spacing:.08em;text-transform:uppercase;color:var(--accent);text-align:right}
+.credit span{display:block;font:400 12px var(--f-body);letter-spacing:0;text-transform:none;color:var(--ink-3)}
+nav.sites{display:flex;flex-wrap:wrap;gap:6px;padding-block:14px}
+nav.sites button{font:600 14px var(--f-display);letter-spacing:.04em;text-transform:uppercase;border:1px solid var(--line);background:var(--panel);color:var(--ink-2);padding:7px 14px;border-radius:999px;cursor:pointer}
+nav.sites button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+nav.sites button:disabled{cursor:not-allowed;opacity:.55}
+nav.sites button small{font:400 11px var(--f-body);text-transform:none;letter-spacing:0;margin-left:4px}
+section{margin-top:22px}
+h2{font:600 19px/1.2 var(--f-display);letter-spacing:.01em;margin:0 0 10px;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+h2 .hint{font:400 13px var(--f-body);color:var(--ink-3)}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:16px}
+.row{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+label.fld{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--ink-2);letter-spacing:.03em}
+label.fld input,label.fld select{font:500 15px var(--f-mono);padding:6px 8px;border:1px solid var(--line);border-radius:4px;background:var(--panel);color:var(--ink);width:110px}
+select,input{color:var(--ink);background:var(--panel)}
+.btn{font:600 14px var(--f-body);border:1px solid var(--accent);background:var(--accent);color:var(--accent-ink);padding:8px 14px;border-radius:4px;cursor:pointer}
+.btn.ghost{background:transparent;color:var(--accent)}
+.btn:focus-visible,button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.drop{border:1.5px dashed var(--accent);border-radius:var(--r);background:var(--accent-soft);padding:16px;display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;justify-content:space-between}
+.drop.over{background:var(--panel-2)}
+.drop p{margin:0;max-width:70ch}
+.drop p b{font-family:var(--f-display);font-size:16px}
+.slots{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px;margin-top:12px}
+.slot{border:1px solid var(--line);border-radius:var(--r);padding:10px 12px;background:var(--panel);display:flex;flex-direction:column;gap:6px;min-width:0}
+.slot .hd{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.slot .nm{font:600 14px var(--f-display);letter-spacing:.05em;text-transform:uppercase}
+.slot .fn{font:12px var(--f-mono);color:var(--ink-2);overflow-wrap:anywhere}
+.slot .meta{font-size:12px;color:var(--ink-3)}
+.slot.empty .fn{color:var(--ink-3)}
+.slot .ctl{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.slot select{font:12px var(--f-body);padding:3px 4px;border:1px solid var(--line);border-radius:4px;max-width:100%}
+.slot label.pick{font:600 12px var(--f-body);color:var(--accent);cursor:pointer;border:1px solid var(--accent);border-radius:4px;padding:3px 8px}
+.slot label.pick input{display:none}
+.slot .x{background:none;border:0;color:var(--ink-3);cursor:pointer;font-size:12px;text-decoration:underline;padding:0}
+.chip{display:inline-flex;align-items:center;gap:4px;font:600 11px var(--f-body);letter-spacing:.04em;text-transform:uppercase;padding:2px 7px;border-radius:999px;background:var(--panel-2);color:var(--ink-2);white-space:nowrap}
+.chip.warn{background:var(--minor-bg);color:var(--minor)}
+.chip.ok{background:var(--pass-bg);color:var(--pass)}
+.chip.err{background:var(--fail-bg);color:var(--fail)}
+.slot .chips{display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end}
+.slot label.mini{display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--ink-3)}
+table.res .hn{font:500 10px var(--f-mono);letter-spacing:0;text-transform:none;color:var(--minor)}
+table.res .hn.err{color:var(--fail);font-weight:600}
+.vd .hold{font:600 13px var(--f-body);color:var(--fail)}
+table.res td.xc{color:var(--ink-3);font-style:italic}
+.slot .hd{flex-wrap:wrap}
+.slot .nm{white-space:nowrap}
+.slot .meta{overflow-wrap:anywhere}
+.slot label.mini{max-width:100%;min-width:0}
+.slot label.mini select{min-width:0;max-width:100%}
+.slot label.mini.wide{display:flex;width:100%}
+.slot label.mini.wide select{flex:1}
+.banner{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;background:var(--panel-2);border:1px solid var(--line);border-radius:var(--r);padding:10px 14px;margin-top:12px;font-size:14px}
+ul.checks{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+ul.checks li{display:grid;grid-template-columns:22px 1fr;gap:8px;padding:8px 12px;border-radius:4px;font-size:14px;background:var(--panel)}
+ul.checks li.w{background:var(--minor-bg)}
+ul.checks li.e{background:var(--fail-bg)}
+ul.checks li.i{background:var(--panel-2)}
+ul.checks li .ic{font-weight:700;text-align:center}
+ul.checks li.w .ic{color:var(--minor)} ul.checks li.e .ic{color:var(--fail)} ul.checks li.i .ic{color:var(--ink-3)}
+.verdicts{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
+.vd{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;display:flex;flex-direction:column;gap:6px}
+.vd .t{display:flex;align-items:center;gap:8px;font:600 14px var(--f-display);letter-spacing:.05em;text-transform:uppercase}
+.vd .sw{width:14px;height:3px;border-radius:2px;flex:none}
+.vd .sw.dash{background:repeating-linear-gradient(90deg,var(--s-ref) 0 4px,transparent 4px 7px)!important}
+.vd .cnt{display:flex;gap:12px;font:500 14px var(--f-mono)}
+.vd .cnt span{display:flex;align-items:center;gap:4px}
+.vd .src{font-size:12px;color:var(--ink-3);overflow-wrap:anywhere}
+.tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r);background:var(--panel)}
+table.res{border-collapse:collapse;width:100%;font-size:13px;font-variant-numeric:tabular-nums}
+table.res th,table.res td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+table.res thead th{font:600 12px var(--f-display);letter-spacing:.05em;text-transform:uppercase;color:var(--ink-2);background:var(--panel-2);position:sticky;top:0;vertical-align:bottom}
+table.res th.l,table.res td.l{text-align:left}
+table.res td.st{font:600 13px var(--f-display)}
+table.res td.goal{font-family:var(--f-mono);font-size:12px;color:var(--ink-2);text-align:left}
+table.res td.v{font-family:var(--f-mono)}
+table.res td.v.p{color:var(--pass)} table.res td.v.m{color:var(--minor);background:var(--minor-bg)} table.res td.v.f{color:var(--fail);background:var(--fail-bg)}
+table.res td.v .g{font-size:10px;margin-left:3px}
+table.res td.dl{font-family:var(--f-mono);color:var(--ink-2)}
+table.res td.dl.bad{color:var(--fail)} table.res td.dl.good{color:var(--pass)}
+table.res .grp{border-left:2px solid var(--line)}
+table.res thead .sw{display:inline-block;width:12px;height:3px;border-radius:2px;vertical-align:middle;margin-right:4px}
+table.res tr.sep td{border-top:2px solid var(--line)}
+table.res .fxc{color:var(--ink-2)}
+.toolbar{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;margin-bottom:10px;font-size:13px;color:var(--ink-2)}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:4px;overflow:hidden}
+.seg button{font:500 12px var(--f-body);border:0;background:var(--panel);color:var(--ink-2);padding:5px 10px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+.legend-key{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--ink-2)}
+.legend-key span{display:inline-flex;align-items:center;gap:4px}
+.st-p{color:var(--pass)} .st-m{color:var(--minor)} .st-f{color:var(--fail)}
+.plotgrid{display:grid;grid-template-columns:minmax(0,1fr) 250px;gap:14px}
+@media (max-width:820px){.plotgrid{grid-template-columns:minmax(0,1fr)}}
+.plot{position:relative;min-width:0}
+.plot svg{width:100%;height:auto;display:block;overflow:visible}
+.plot .tt{position:absolute;pointer-events:none;background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:6px 8px;font:12px var(--f-mono);box-shadow:0 2px 8px rgba(0,0,0,.12);white-space:nowrap}
+.plot .tt .r{display:flex;gap:6px;align-items:center}
+.plot .tt .sw{width:10px;height:3px;border-radius:2px}
+.side{display:flex;flex-direction:column;gap:10px;font-size:13px}
+.side .series label{display:flex;align-items:center;gap:8px;padding:3px 0;cursor:pointer}
+.side .series .sw{width:18px;height:3px;border-radius:2px}
+.side .pts{font:12px var(--f-mono);color:var(--ink-2)}
+.side .pts div{display:flex;justify-content:space-between;gap:8px;border-bottom:1px dotted var(--line);padding:2px 0}
+table.map{border-collapse:collapse;font-size:13px;width:100%}
+table.map td,table.map th{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left}
+table.map th{font:600 12px var(--f-display);letter-spacing:.05em;text-transform:uppercase;color:var(--ink-2)}
+table.map select{font:13px var(--f-mono);padding:4px;border:1px solid var(--line);border-radius:4px;max-width:100%}
+.method{font-size:14px;color:var(--ink-2);max-width:78ch}
+.method p{margin:0 0 10px}
+.method b{color:var(--ink)}
+.method code{font-family:var(--f-mono);font-size:13px;background:var(--panel-2);padding:1px 4px;border-radius:3px;color:var(--ink)}
+footer{margin-top:34px;padding-top:14px;border-top:1px solid var(--line);display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px;font-size:12px;color:var(--ink-3)}
+footer b{color:var(--accent);font-family:var(--f-display);letter-spacing:.06em;text-transform:uppercase}
+.toast{position:fixed;bottom:calc(18px + env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:8px 14px;border-radius:4px;font-size:13px;z-index:20}
+textarea.copyfallback{width:100%;height:120px;font:12px var(--f-mono);margin-top:8px}
+/* adaptation + constraint editor */
+.adaptrow{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap}
+.adapt{display:inline-flex;border:1px solid var(--line);border-radius:4px;overflow:hidden}
+.adapt button{font:600 11px var(--f-body);border:0;background:var(--panel);color:var(--ink-2);padding:3px 8px;cursor:pointer}
+.adapt button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+.autotag{font-size:10px;color:var(--ink-3);font-style:italic}
+.slot label.mini input{font:12px var(--f-mono);padding:2px 5px;border:1px solid var(--line);border-radius:4px;width:76px;background:var(--panel);color:var(--ink)}
+table.res .hn2{font:400 10px var(--f-mono);letter-spacing:0;text-transform:none;color:var(--ink-3)}
+.settool{display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center;margin-bottom:8px}
+.setcount{font-size:13px;color:var(--ink-2)}
+#setsec button.x{background:none;border:0;color:var(--ink-3);cursor:pointer;font-size:12px;text-decoration:underline;padding:0;font-family:var(--f-body)}
+#setsec button.x[data-armed]{color:var(--fail);font-weight:600}
+#setsec button.x.add{color:var(--accent);margin-top:6px}
+.srcnote{font-size:12px;color:var(--ink-3);margin-bottom:10px;max-width:110ch}
+.srcnote p{margin:0 0 4px}
+table.map td.clist{font:12px/1.45 var(--f-mono);color:var(--ink-2);min-width:190px}
+.erow{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:flex-end;margin:4px 0 12px}
+.enote{font-size:12px;color:var(--ink-3);max-width:70ch}
+label.fld2{display:flex;flex-direction:column;gap:3px;font-size:11px;color:var(--ink-3);letter-spacing:.03em}
+label.fld2 input,label.fld2 select{font:13px var(--f-body);padding:5px 7px;border:1px solid var(--line);border-radius:4px;background:var(--panel);color:var(--ink);min-width:0}
+label.fld2 input[type=number]{width:110px;font-family:var(--f-mono)}
+label.fld2.grow{flex:1;min-width:200px}
+label.fld2.grow input{width:100%}
+.ocard{border:1px solid var(--line);border-radius:var(--r);padding:12px;margin-bottom:10px;background:var(--panel)}
+.orow{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:flex-end;margin-bottom:8px}
+.ctab-wrap{overflow-x:auto}
+table.ctab{border-collapse:collapse;font-size:12px;width:100%}
+table.ctab th{font:600 11px var(--f-display);letter-spacing:.05em;text-transform:uppercase;color:var(--ink-3);text-align:left;padding:4px 6px;border-bottom:1px solid var(--line)}
+table.ctab td{padding:4px 6px;border-bottom:1px solid var(--line);white-space:nowrap}
+table.ctab input,table.ctab select{font:12px var(--f-mono);padding:3px 5px;border:1px solid var(--line);border-radius:4px;background:var(--panel);color:var(--ink)}
+table.ctab input[type=number]{width:74px}
+table.ctab td.pair{display:flex;gap:4px;align-items:center}
+table.ctab input.srcin{width:260px;font-family:var(--f-body)}
+.na{color:var(--ink-3);font-size:12px}
+/* case archive */
+nav.sites .archlink{margin-left:auto;border-color:var(--accent);color:var(--accent);background:var(--panel)}
+.savebar{display:flex;flex-wrap:wrap;gap:10px 12px;align-items:flex-end}
+.savebar label.fld input{font:14px var(--f-body);width:220px}
+.savebar label.fld.grow{flex:1;min-width:220px}
+.savebar label.fld.grow input{width:100%}
+.savemsg{font-size:13px;color:var(--ink-2);min-height:22px;margin-top:8px;display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center}
+.savemsg .ok{color:var(--pass);font-weight:600}
+.savemsg .warn{color:var(--minor)}
+.archbar{display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center;margin:12px 0 10px;padding-top:12px;border-top:1px solid var(--line)}
+.archbar .count{font:600 14px var(--f-display);letter-spacing:.04em;text-transform:uppercase}
+label.chk{display:inline-flex;gap:6px;align-items:center;font-size:13px;color:var(--ink-2);cursor:pointer}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.sm{padding:4px 10px;font-size:13px}
+.arch .tbl-wrap{max-height:460px;overflow:auto}
+table.arch-t td.nt{white-space:normal;min-width:150px;max-width:300px;text-align:left;color:var(--ink-2);font-size:12px}
+table.arch-t td.vc{font-family:var(--f-mono)}
+table.arch-t td.empty{white-space:normal;text-align:left;color:var(--ink-2);padding:18px 14px;font-size:14px}
+table.arch-t .hn2{font:400 10px var(--f-body);letter-spacing:0;text-transform:none;color:var(--ink-3)}
+.archfoot{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px;font-size:12px;color:var(--ink-3);margin-top:8px;align-items:center}
+.archnote{font-size:12px;color:var(--ink-3);margin-top:-2px}
+.arch button.x{background:none;border:0;color:var(--ink-3);cursor:pointer;font-size:12px;text-decoration:underline;padding:0;font-family:var(--f-body)}
+.arch button.x[data-armed]{color:var(--fail);font-weight:600}
+@media (prefers-reduced-motion:no-preference){.btn,.seg button{transition:background .15s}}
+</style>
+
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}</style>
+</head>
+<body>
+<div class="wrap">
+<header class="top">
+  <div class="brand">
+    <h1>Adaptive Cumulative DVH</h1>
+    <div class="sub">MR-Linac online-adaptive SBRT · per-fraction accumulation vs reference, rigid and deformable sums<span id="pidline"></span></div>
+  </div>
+  <div class="credit">Designed by MPE Ali Eid<span>Medical Physics Expert</span></div>
+</header>
+
+<nav class="sites" id="sites" aria-label="Treatment site"></nav>
+
+<section id="load">
+  <h2>1 · Load DVH exports <span class="hint">Monaco DVH .txt (absolute cm³ preferred) · RayStation .dvh for the deformable sum</span></h2>
+  <div class="panel">
+    <div class="row" style="margin-bottom:12px">
+      <label class="fld">Prescription (Gy)<input id="rx" type="number" step="0.01" min="1"></label>
+      <label class="fld">Fractions<input id="nfx" type="number" step="1" min="1" max="10"></label>
+      <div style="font-size:13px;color:var(--ink-2);max-width:52ch">Files are read inside this browser only. Nothing is uploaded, and patient names in the exports are never displayed.</div>
+    </div>
+    <div class="drop" id="drop">
+      <p><b>Drop the whole case here</b><br>Files are sorted by name: <code>Ref…</code> → reference, <code>Fr01…Fr05</code> → fractions (<code>partial</code> in the name marks a single-fraction export), <code>Rigid</code> → rigid sum (Monaco or RayStation), <code>deform…</code> or any <code>.dvh</code> → deformable sum.</p>
+      <label class="btn" for="multi">Choose files<input id="multi" type="file" multiple accept=".txt,.dvh,.csv" style="display:none"></label>
+    </div>
+    <div class="slots" id="slots"></div>
+    <div class="banner" id="demoBanner" hidden><span><b>Synthetic demo case.</b> These DVHs are generated, not from a patient. Load your exports to replace them.</span><button class="btn ghost" id="clearDemo">Clear demo</button></div>
+  </div>
+</section>
+
+<section id="checksSec">
+  <h2>2 · Data checks</h2>
+  <ul class="checks" id="checks"></ul>
+</section>
+
+<section>
+  <h2>3 · Verdict <span class="hint">constraints met / minor deviation / failed</span></h2>
+  <div class="verdicts" id="verdicts"></div>
+</section>
+
+<section>
+  <h2>4 · Constraint results</h2>
+  <div class="toolbar">
+    <span>Fraction columns
+      <span class="seg" id="segFx"><button data-v="total" aria-pressed="true">Plan total</button><button data-v="share">Delivered share</button></span></span>
+    <span>Δ against
+      <span class="seg" id="segBase"><button data-v="ref" aria-pressed="true">Reference</button><button data-v="cum">Cumulative</button></span></span>
+    <span style="flex:1"></span>
+    <button class="btn ghost" id="copyTsv">Copy table for Excel</button>
+    <button class="btn ghost" id="dlCsv">Download CSV</button>
+    <button class="btn ghost" id="printBtn" hidden>Print report</button>
+  </div>
+  <div class="tbl-wrap"><table class="res" id="res"></table></div>
+  <div class="legend-key" style="margin-top:8px"><span class="st-p">✓ met</span><span class="st-m">! minor deviation (within the bracketed tolerance)</span><span class="st-f">✕ failed</span><span>— not available</span><span id="shareNote"></span></div>
+  <textarea class="copyfallback" id="copyFallback" hidden aria-label="Table text to copy"></textarea>
+</section>
+
+<section id="archive">
+  <h2>5 · Case archive <span class="hint">saved on this computer; export every case at once for statistics</span></h2>
+  <div class="panel arch">
+    <div class="savebar">
+      <label class="fld">Case label<input id="caseLabel" type="text" maxlength="80" autocomplete="off" spellcheck="false"></label>
+      <label class="fld grow">Notes<input id="caseNotes" type="text" maxlength="300" autocomplete="off" placeholder="Optional, e.g. ATS on Fx1 and Fx4, rectal gas on Fx2"></label>
+      <button class="btn" id="saveCase">Save case to archive</button>
+    </div>
+    <div class="savemsg" id="saveMsg" aria-live="polite"></div>
+    <div class="archbar">
+      <span class="count" id="archCount"></span>
+      <span style="flex:1"></span>
+      <label class="chk"><input type="checkbox" id="anon" checked>Anonymise exports</label>
+      <button class="btn" id="expXlsx">Export for statistics (.xlsx)</button>
+      <button class="btn ghost" id="expCsv">Export CSV (long format)</button>
+      <button class="btn ghost" id="backup" title="Complete copy of the archive, including patient IDs. Keep it on secure hospital storage.">Back up (.json)</button>
+      <label class="btn ghost" for="restore">Restore backup<input id="restore" type="file" accept=".json,application/json" style="display:none"></label>
+    </div>
+    <div class="archnote">Anonymised exports number the cases C001, C002… and leave out patient IDs, labels and file names. Notes are exported as typed.</div>
+    <div class="tbl-wrap" style="margin-top:10px"><table class="res arch-t" id="archTable"></table></div>
+    <div class="archfoot" id="archFoot"></div>
+  </div>
+</section>
+
+<section>
+  <h2>6 · DVH comparison <span class="hint">volume in % of each structure; hover for values</span></h2>
+  <div class="panel plotgrid">
+    <div class="plot" id="plot"></div>
+    <div class="side">
+      <label class="fld" style="font-size:12px">Structure<select id="plotStruct" style="width:100%"></select></label>
+      <div class="series" id="seriesToggles"></div>
+      <div class="pts" id="plotPts"></div>
+    </div>
+  </div>
+</section>
+
+<section id="setsec">
+  <h2>7 · Structures &amp; constraints <span class="hint">name matching and the constraint set for this site</span></h2>
+  <div class="panel">
+    <div class="settool"><span id="setState"></span><span style="flex:1"></span>
+      <button class="btn sm" id="editToggle" aria-pressed="false">Edit constraints</button>
+      <button class="btn ghost sm" id="setExport">Export set (.json)</button>
+      <label class="btn ghost sm" for="setImport">Import set<input id="setImport" type="file" accept=".json,application/json" style="display:none"></label>
+      <button class="x" id="setReset">Reset to defaults…</button></div>
+    <div class="srcnote" id="srcNote"></div>
+    <div id="mapWrap" style="overflow-x:auto"><table class="map" id="map"></table></div>
+    <div id="editor" hidden></div>
+  </div>
+</section>
+
+<section>
+  <h2>8 · Method</h2>
+  <div class="panel method" id="method"></div>
+</section>
+
+<footer><span><b>Designed by MPE Ali Eid</b> · Adaptive Cumulative DVH · v1.5</span><span>For clinical physics review. Verify against the planning system before any decision.</span></footer>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+"use strict";
+const APP_VERSION = "1.5";
+/* ================= Constraint library =================
+   Prostate and liver: the department's Monaco templates. Lung, pancreas, renal, adrenal, bone and stomach:
+   published 5-fraction limits. Every set can be edited in section 7 and is then saved on this computer. */
+const SRC = {
+  dept:  "Department Monaco template",
+  tg101: "AAPM TG-101, 5 fractions (Benedict et al., Med Phys 2010;37:4078–4101)",
+  hytec: "HyTEC spinal cord, Dmax 25.3 Gy in 5 fractions (Sahgal et al., IJROBP 2021;110:124–136); minor band to TG-101 30 Gy",
+  uk22:  "UK 2022 SABR consensus, optimal 10% / mandatory 15% (Diez et al., Clin Oncol 2022;34:288–300)",
+  smart: "SMART MR-guided pancreas 50 Gy/5, GI organs V33Gy ≤ 1 cm³ (Parikh et al., IJROBP 2023)",
+  dunlap:"Chest wall V30Gy < 30 cm³ (Dunlap et al., IJROBP 2010;76:796–801)",
+  cov:   "SBRT target-coverage convention; edit to your protocol"
+};
+const srcText = k => SRC[k] || k || "";
+const P = {
+  cord:[/^(spinal)?cord$/, /^(spinal)?cord(prv|\d)/, /cord.*prv|prv.*cord/, /spinalcanal|^canal$/, /cord/],
+  cauda:[/cauda/, /thecal/], sacral:[/sacral.*plex|lumbosacral|lumbsac|sacplex/],
+  esoph:[/^o?esophag/], brach:[/brach.*plex|^bplex/], heart:[/^heart/, /pericard/],
+  vessels:[/greatves|great.*vessel|^aorta|venacava|^ivc$|^svc$/], trachea:[/^trachea/],
+  bronchus:[/bronch.*prox|prox.*bronch|^pbt|bronchialtree|^mainbronch|^bronchus/],
+  chest:[/chest.*wall|^cw$|^ribs?$/], skin:[/^skin/],
+  lungs:[/^lungs(itv|gtv|igtv|minus.*)?$/, /bil.*lung|lung.*bil|totallung|lungtotal|bothlung|lungboth|lungscombined/, /^lungs/],
+  stomach:[/^stomach/], duod:[/duoden/], sbowel:[/small.*bowel|bowel.*small|^sb$|jejun|ileum|smallintest/],
+  colon:[/colon|large.*bowel|bowel.*large|^lb$|sigmoid/], rectum:[/^rectum/], bladder:[/^bladder/],
+  liver:[/^liver$/, /^liver(gtv|itv|ptv|minus)/, /^liver/],
+  kidneys:[/^kidneys$/, /kidneys?(combined|both|total|bil)|bothkidney|bil.*kidney|totalkidney/],
+  femR:[/^fem.*(rt|right|r)$/, /fem.*(rt|right)/], femL:[/^fem.*(lt|left|l)$/, /fem.*(lt|left)/]
+};
+const C = (s, src, list) => list.map(c => Object.assign({s, src}, c));
+const DMX = lim => ({t:"D", vol:0.035, vu:"cc", op:"<=", lim});
+const VCC = (x, lim) => ({t:"V", x, op:"<=", lim, u:"cc"});
+const OAR = {
+  cord:    s => [...C(s,"hytec",[Object.assign(DMX(25.3),{tol:4.7})]), ...C(s,"tg101",[VCC(23,0.35), VCC(14.5,1.2)])],
+  cauda:   s => C(s,"tg101",[VCC(30,5), DMX(32)]),
+  esoph:   s => C(s,"tg101",[VCC(19.5,5), DMX(35)]),
+  brach:   s => C(s,"tg101",[VCC(27,3), DMX(30.5)]),
+  heart:   s => C(s,"tg101",[VCC(32,15), DMX(38)]),
+  vessels: s => C(s,"tg101",[VCC(47,10), DMX(53)]),
+  airway:  s => C(s,"tg101",[VCC(16.5,4), DMX(40)]),
+  ribs:    s => [...C(s,"tg101",[VCC(35,1), DMX(43)]), ...C(s,"dunlap",[VCC(30,30)])],
+  skin:    s => C(s,"tg101",[VCC(36.5,10), DMX(39.5)]),
+  stomach: s => C(s,"tg101",[VCC(18,10), DMX(32)]),
+  duod:    s => C(s,"tg101",[VCC(18,5), VCC(12.5,10), DMX(32)]),
+  sbowel:  s => C(s,"tg101",[VCC(19.5,5), DMX(35)]),
+  colon:   s => C(s,"tg101",[VCC(25,20), DMX(38)]),
+  rectum:  s => C(s,"tg101",[VCC(25,20), DMX(38)]),
+  bladder: s => C(s,"tg101",[VCC(18.3,15), DMX(38)]),
+  femhead: s => C(s,"tg101",[VCC(30,10)]),
+  lungs:   s => [...C(s,"tg101",[{t:"CV",x:12.5,op:">=",lim:1500},{t:"CV",x:13.5,op:">=",lim:1000}]), ...C(s,"uk22",[{t:"V",x:20,op:"<=",lim:10,u:"%",tol:5}])],
+  liver:   s => C(s,"tg101",[{t:"CV",x:21,op:">=",lim:700}]),
+  kidneys: s => C(s,"tg101",[{t:"CV",x:17.5,op:">=",lim:200}]),
+  gi33:    s => C(s,"smart",[VCC(33,1)])
+};
+const ITEM = (key, label, pats, block, o) => ({st:Object.assign({key, label, pats}, o||{}), cons: block ? block(key) : []});
+const OPT = {optional:true};
+const O = {
+  cord:o=>ITEM("Spinal Cord","Spinal Cord",P.cord,OAR.cord,o), cauda:o=>ITEM("Cauda Equina","Cauda Equina",P.cauda,OAR.cauda,o),
+  sacral:o=>ITEM("Sacral Plexus","Sacral Plexus",P.sacral,OAR.cauda,o), esoph:o=>ITEM("Esophagus","Esophagus",P.esoph,OAR.esoph,o),
+  brach:o=>ITEM("Brachial Plexus","Brachial Plexus",P.brach,OAR.brach,o), heart:o=>ITEM("Heart","Heart/Pericardium",P.heart,OAR.heart,o),
+  vessels:o=>ITEM("Great Vessels","Great Vessels",P.vessels,OAR.vessels,o), trachea:o=>ITEM("Trachea","Trachea",P.trachea,OAR.airway,o),
+  bronchus:o=>ITEM("Bronchus","Proximal Bronchus",P.bronchus,OAR.airway,o), chest:o=>ITEM("Chest Wall","Chest Wall/Ribs",P.chest,OAR.ribs,o),
+  skin:o=>ITEM("Skin","Skin",P.skin,OAR.skin,o), lungs:o=>ITEM("Lungs","Lungs (total − ITV)",P.lungs,OAR.lungs,o),
+  stomach:(o,b)=>ITEM("Stomach","Stomach",P.stomach,b||OAR.stomach,o), duod:(o,b)=>ITEM("Duodenum","Duodenum",P.duod,b||OAR.duod,o),
+  sbowel:(o,b)=>ITEM("Small Bowel","Small Bowel",P.sbowel,b||OAR.sbowel,o), colon:(o,b)=>ITEM("Colon","Large Bowel/Colon",P.colon,b||OAR.colon,o),
+  rectum:o=>ITEM("Rectum","Rectum",P.rectum,OAR.rectum,o), bladder:o=>ITEM("Bladder","Bladder",P.bladder,OAR.bladder,o),
+  liver:o=>ITEM("Liver","Liver",P.liver,OAR.liver,o), kidneys:o=>ITEM("Kidneys","Kidneys (combined)",P.kidneys,OAR.kidneys,o),
+  femR:o=>ITEM("Femoral Head Rt","Femoral Head Rt",P.femR,OAR.femhead,o), femL:o=>ITEM("Femoral Head Lt","Femoral Head Lt",P.femL,OAR.femhead,o)
+};
+const TARGETS = () => [
+  {st:{key:"PTV", label:"PTV", target:true, pats:[/^ptv$/, /^ptv/]}, cons:C("PTV","cov",[{t:"V",x:100,xu:"%Rx",op:">=",lim:95,u:"%",tol:5},{t:"D",vol:99,vu:"%",op:">=",lim:90,lu:"%Rx"}])},
+  {st:{key:"GTV", label:"GTV/ITV", optional:true, pats:[/^i?gtv$/, /^itv$/, /^i?gtv/, /^itv/]}, cons:C("GTV","cov",[{t:"D",vol:98,vu:"%",op:">=",lim:100,lu:"%Rx"}])}
+];
+const RXNOTE = "The default prescription is a starting value: set each case's prescription in section 1.";
+function SITE(label, rx, plotDefault, rxNote, items){
+  return {label, rx, n:5, ready:true, plotDefault, rxNote, structures: items.map(i=>i.st), constraints: items.flatMap(i=>i.cons)};
+}
+const SITES_DEF = {
+  prostate: {
+    label: "Prostate", rx: 36.25, n: 5, ready: true, plotDefault: "Rectum",
+    structures: [
+      {key:"CTV40Gy", label:"CTV40Gy", optional:true, pats:[/ctv.*40/]},
+      {key:"PTV36.25Gy", label:"PTV36.25Gy", target:true, pats:[/ptv.*36/, /^ptv$/, /^ptv.*/]},
+      {key:"Penile Bulb", label:"Penile Bulb", pats:[/penile/, /bulb/]},
+      {key:"Rectum", label:"Rectum", pats:[/^rectum$/, /rectum/]},
+      {key:"Bladder", label:"Bladder", pats:[/^bladder$/, /bladder/]},
+      {key:"Femoral Head Rt", label:"Femoral Head Rt", pats:[/^fem.*(rt|right|r)$/, /fem.*(rt|right)/]},
+      {key:"Femoral Head Lt", label:"Femoral Head Lt", pats:[/^fem.*(lt|left|l)$/, /fem.*(lt|left)/]},
+      {key:"Urethra", label:"Urethra", pats:[/^urethra$/, /urethra/]}
+    ],
+    constraints: [
+      {s:"CTV40Gy", t:"V", x:38, op:">=", lim:95, u:"%"},
+      {s:"PTV36.25Gy", t:"D", vol:95, vu:"%", op:">=", lim:34, tol:0.5},
+      {s:"PTV36.25Gy", t:"V", x:34.437, op:">=", lim:95, u:"%"},
+      {s:"Penile Bulb", t:"V", x:30, op:"<=", lim:3, u:"cc"},
+      {s:"Penile Bulb", t:"V", x:29.5, op:"<=", lim:50, u:"%"},
+      {s:"Penile Bulb", t:"V", x:19.9, op:"<=", lim:3, u:"cc"},
+      {s:"Rectum", t:"D", vol:0.035, vu:"cc", op:"<=", lim:38},
+      {s:"Rectum", t:"V", x:36, op:"<=", lim:1, u:"cc", tol:1},
+      {s:"Rectum", t:"V", x:29, op:"<=", lim:20, u:"cc"},
+      {s:"Rectum", t:"V", x:18.1, op:"<=", lim:50, u:"%"},
+      {s:"Bladder", t:"D", vol:0.035, vu:"cc", op:"<=", lim:38},
+      {s:"Bladder", t:"V", x:37, op:"<=", lim:5, u:"cc", tol:5},
+      {s:"Bladder", t:"V", x:18.1, op:"<=", lim:40, u:"%"},
+      {s:"Femoral Head Rt", t:"V", x:30, op:"<=", lim:10, u:"cc"},
+      {s:"Femoral Head Rt", t:"V", x:14.5, op:"<=", lim:5, u:"%"},
+      {s:"Femoral Head Lt", t:"V", x:30, op:"<=", lim:10, u:"cc"},
+      {s:"Femoral Head Lt", t:"V", x:14.5, op:"<=", lim:5, u:"%"},
+      {s:"Urethra", t:"V", x:42, op:"<=", lim:0.035, u:"cc"}
+    ],
+    // synthetic demo: [key, volume cm³, components [weight, mu, sigma], high-dose cut-off, minimum dose, moves with target]
+    demo: [
+      ["CTV40Gy",38,[[1,40.6,.45]],0,38.6,1], ["PTV36.25Gy",80,[[1,37.5,.55]],0,33.5,1],
+      ["Penile Bulb",1.4,[[.7,14,4],[.3,27,2.5]],0,0,0], ["Rectum",50,[[.6,8,4],[.4,22,4]],37.0,0,0],
+      ["Bladder",300,[[.75,6,3],[.25,24,6]],36.0,0,0], ["Femoral Head Rt",140,[[1,6.5,2.5]],0,0,0],
+      ["Femoral Head Lt",140,[[1,6.2,2.5]],0,0,0], ["Urethra",2.3,[[1,37.2,.6]],0,34,1]
+    ]
+  },
+  liver: {
+    label: "Liver", rx: 50, n: 5, ready: true, plotDefault: "liver-gtv",
+    structures: [
+      {key:"Heart", label:"Heart", pats:[/^heart$/, /^heart/]},
+      {key:"chestwall", label:"chestwall", pats:[/^chest.*wall$/, /chest.*wall/, /^cw$/]},
+      {key:"iGTV1", label:"iGTV1", pats:[/^igtv0?1$/, /^igtv$/, /^itv0?1$/, /^itv$/, /^gtv0?1$/, /^gtv$/]},
+      {key:"iGTV2", label:"iGTV2", optional:true, pats:[/^igtv0?2$/, /^itv0?2$/, /^gtv0?2$/]},
+      {key:"PTV1", label:"PTV1", target:true, pats:[/^ptv0?1$/, /^ptv$/, /^ptv0?1/, /^ptv(?!.*2)/]},
+      {key:"PTV2", label:"PTV2", optional:true, pats:[/^ptv0?2$/, /^ptv0?2/]},
+      {key:"Bil Lungs", label:"Bil Lungs", pats:[/bil.*lung|lung.*bil/, /^lungs$/, /lungtotal|totallung|bothlung|lungboth/, /^lungs/]},
+      {key:"CHT", label:"CHT", pats:[/^cht$/, /hepatobil|biliary|centralhep/, /^cht/]},
+      {key:"Cord PRV", label:"Cord PRV", pats:[/cord.*prv|prv.*cord/]},
+      {key:"Esophagus", label:"Esophagus", pats:[/^o?esophagus$/, /o?esophag/]},
+      {key:"Lt kidney", label:"Lt kidney", pats:[/^(lt|l|left)kidney$/, /^kidney(lt|l|left)$/, /kidney.*(lt|left)|(lt|left).*kidney/]},
+      {key:"Rt kidney", label:"Rt kidney", pats:[/^(rt|r|right)kidney$/, /^kidney(rt|r|right)$/, /kidney.*(rt|right)|(rt|right).*kidney/]},
+      {key:"Skin", label:"Skin", pats:[/^skin$/, /^skin/]},
+      {key:"Stomach", label:"Stomach", pats:[/^stomach$/, /stomach/]},
+      {key:"liver-gtv", label:"liver-gtv", pats:[/^liver.*(gtv|itv|ptv)/, /liver.*minus/, /normalliver/]}
+    ],
+    constraints: [
+      {s:"Heart", t:"D", vol:0.03, vu:"cc", op:"<=", lim:38},
+      {s:"Heart", t:"D", vol:0.5, vu:"cc", op:"<=", lim:35},
+      {s:"Heart", t:"D", vol:5, vu:"cc", op:"<=", lim:30},
+      {s:"chestwall", t:"V", x:30, op:"<=", lim:30, u:"cc"},
+      {s:"chestwall", t:"D", vol:0.035, vu:"cc", op:"<=", lim:43},
+      {s:"iGTV1", t:"D", vol:100, vu:"%", op:">=", lim:47.5, tol:2.5},
+      {s:"iGTV2", t:"D", vol:100, vu:"%", op:">=", lim:47.5, tol:2.5},
+      {s:"PTV1", t:"D", vol:0.035, vu:"cc", op:"<=", lim:60, tol:15},
+      {s:"PTV1", t:"D", vol:95, vu:"%", op:">=", lim:50},
+      {s:"PTV2", t:"D", vol:0.035, vu:"cc", op:"<=", lim:60, tol:15},
+      {s:"PTV2", t:"D", vol:95, vu:"%", op:">=", lim:50},
+      {s:"Bil Lungs", t:"D", vol:0.03, vu:"cc", op:"<=", lim:70},
+      {s:"CHT", t:"D", vol:21, vu:"cc", op:"<=", lim:40},
+      {s:"CHT", t:"M", op:"<=", lim:19},
+      {s:"Cord PRV", t:"D", vol:0.5, vu:"cc", op:"<=", lim:25},
+      {s:"Esophagus", t:"D", vol:0.5, vu:"cc", op:"<=", lim:32},
+      {s:"Lt kidney", t:"M", op:"<=", lim:12},
+      {s:"Rt kidney", t:"M", op:"<=", lim:12},
+      {s:"Skin", t:"D", vol:0.5, vu:"cc", op:"<=", lim:39},
+      {s:"Skin", t:"D", vol:10, vu:"cc", op:"<=", lim:36.5},
+      {s:"Stomach", t:"D", vol:0.5, vu:"cc", op:"<=", lim:32},
+      {s:"Stomach", t:"D", vol:5, vu:"cc", op:"<=", lim:25},
+      {s:"liver-gtv", t:"V", x:15, op:"<=", lim:700, u:"cc"}
+    ],
+    demo: [
+      ["Heart",600,[[.9,2,1],[.1,8,4]],37,0,0], ["chestwall",400,[[.8,3,2],[.2,12,5]],40,0,0],
+      ["iGTV1",20,[[1,57,1]],0,52.5,1], ["iGTV2",8,[[1,56.5,1]],0,51.8,1],
+      ["PTV1",60,[[1,56,2]],58,44,1], ["PTV2",25,[[1,56.3,2]],58.2,45,1],
+      ["Bil Lungs",3500,[[.95,.8,.5],[.05,6,4]],50,0,0], ["CHT",60,[[.7,4,2],[.3,10,4]],30,0,0],
+      ["Cord PRV",40,[[1,4,2]],14,0,0], ["Esophagus",30,[[1,6,3]],22,0,0],
+      ["Lt kidney",160,[[1,.8,.6]],0,0,0], ["Rt kidney",170,[[.8,1.5,1],[.2,6,3]],0,0,0],
+      ["Skin",2500,[[.97,1,.6],[.03,8,4]],30,0,0], ["Stomach",250,[[.85,2,1.5],[.15,8,4]],30,0,0],
+      ["liver-gtv",1500,[[.55,6,3],[.45,14,5]],0,0,0]
+    ]
+  },
+  lung: SITE("Lung", 50, "Lungs", RXNOTE, [...TARGETS(), O.cord(), O.esoph(), O.heart(), O.vessels(OPT), O.trachea(), O.bronchus(OPT), O.brach(OPT), O.chest(), O.skin(), O.lungs(), O.stomach(OPT)]),
+  pancreas: SITE("Pancreas", 50, "Duodenum", "Default 50 Gy/5 as in the SMART MR-guided trial. The ASTRO 2019 guideline recommends 33–40 Gy/5 for locally advanced disease (no organ-at-risk limits given). Set each case's prescription in section 1.",
+    [...TARGETS(), O.duod(null,OAR.gi33), O.stomach(null,OAR.gi33), O.sbowel(null,OAR.gi33), O.colon(null,OAR.gi33), O.cord(), O.liver(OPT), O.kidneys(OPT)]),
+  renal: SITE("Renal", 40, "Small Bowel", RXNOTE, [...TARGETS(), O.cord(), O.duod(OPT), O.stomach(OPT), O.sbowel(), O.colon(OPT), O.liver(OPT), O.kidneys(OPT), O.skin(OPT)]),
+  adrenal: SITE("Adrenal", 40, "Kidneys", RXNOTE, [...TARGETS(), O.cord(), O.kidneys(OPT), O.stomach(OPT), O.duod(OPT), O.sbowel(OPT), O.colon(OPT), O.liver(OPT), O.esoph(OPT)]),
+  bone: SITE("Bone", 35, "Spinal Cord", RXNOTE + " Organs are optional, so only those present in the exports are evaluated.", [...TARGETS(), O.cord(OPT), O.cauda(OPT), O.sacral(OPT), O.esoph(OPT), O.heart(OPT), O.skin(OPT), O.stomach(OPT), O.duod(OPT), O.sbowel(OPT), O.colon(OPT), O.rectum(OPT), O.bladder(OPT), O.kidneys(OPT), O.femR(OPT), O.femL(OPT)]),
+  stomach: SITE("Stomach", 40, "Duodenum", RXNOTE + " The stomach is the target here, so it is not listed as an organ at risk.", [...TARGETS(), O.duod(), O.sbowel(), O.colon(OPT), O.esoph(OPT), O.cord(), O.liver(OPT), O.kidneys(OPT), O.heart(OPT)])
+};
+for (const k of ["prostate","liver"]) SITES_DEF[k].constraints.forEach(c=>{ if (!c.src) c.src = "dept"; });
+
+/* ---------- Edited constraint sets, saved on this computer ---------- */
+const SET_KEY = "acd.sites.v1";
+let CUSTOM = {}; try { CUSTOM = JSON.parse(localStorage.getItem(SET_KEY) || "{}") || {}; } catch(_){ CUSTOM = {}; }
+let SITES = {};
+function serSite(st){
+  return {rx:st.rx, n:st.n, plotDefault:st.plotDefault||"",
+    structures: st.structures.map(x=>({key:x.key, label:x.label, target:!!x.target, optional:!!x.optional, aliases:(x.aliases||[]).slice(), pats:(x.pats||[]).map(r=> r instanceof RegExp ? r.source : String(r))})),
+    constraints: st.constraints.map(c=>Object.assign({}, c))};
+}
+function hydrate(k, ser){
+  const base = SITES_DEF[k];
+  if (!ser || !Array.isArray(ser.structures) || !Array.isArray(ser.constraints)) throw new Error("bad set");
+  return Object.assign({}, base, {rx:+ser.rx||base.rx, n:+ser.n||base.n, plotDefault:ser.plotDefault||base.plotDefault, edited:true,
+    structures: ser.structures.map(x=>Object.assign({}, x, {pats:(x.pats||[]).map(q=>{ try { return new RegExp(q); } catch(_){ return null; } }).filter(Boolean)})),
+    constraints: ser.constraints.map(c=>Object.assign({}, c))});
+}
+function rebuildSites(){
+  SITES = {};
+  for (const k of Object.keys(SITES_DEF)){
+    let eff = SITES_DEF[k];
+    if (CUSTOM[k]){ try { eff = hydrate(k, CUSTOM[k]); } catch(_){ delete CUSTOM[k]; } }
+    SITES[k] = eff;
+  }
+}
+function saveSets(){ try { localStorage.setItem(SET_KEY, JSON.stringify(CUSTOM)); } catch(_){ toast("This view could not save the edited set; it applies until the page closes."); } }
+rebuildSites();
+
+/* ================= State ================= */
+const S = {
+  site:"prostate", rx:36.25, n:5,
+  ref:null, rigid:null, def:null, fx:[], fxMode:[], fxCorr:[], rigCorr:"none", refUnit:"auto", defUnit:"auto",
+  K:{fx:[], excl:[], rig:1, fxInfo:[], rigInfo:null, anchor:null, cumD50:null, hold:{ref:false, rig:false, def:false, fx:[]}},
+  map:{}, mapTouched:{}, fxView:"total", base:"ref", plotStruct:null,
+  show:{ref:true,cum:true,rig:true,def:true,fx:true}, demo:false, labelAuto:true, lastPid:null,
+  fxAdapt:[], fxSeries:[], editMode:false
+};
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const norm = s => String(s).toLowerCase().replace(/[^a-z0-9.]/g,"").replace(/\.(?!\d)/g,"");
+
+/* ================= Parsers ================= */
+function finishCurve(name, d, v, rel){
+  // ensure ascending dose
+  const idx = d.map((_,i)=>i).sort((a,b)=>d[a]-d[b] || v[b]-v[a]);
+  const D = idx.map(i=>d[i]), V = idx.map(i=>v[i]);
+  const tv = rel ? null : Math.max(...V);
+  const P = rel ? V.slice() : V.map(x => tv>0 ? x/tv*100 : 0);
+  return {name, d:D, p:P, tv};
+}
+/* Dose-axis units of a Monaco export, read from the data itself.
+   Monaco prints each dose at a bin centre, (k+½)·bin, with the bin width given in the header. A Gy export therefore
+   sits on that grid. An export made with the DVH in relative dose (% of prescription) still says "Dose Units: Gy",
+   but its values reach the grid only after multiplying by prescription/100; the smallest prescription that does so
+   is the file's 100% dose. Returns {unit:"Gy"}, {unit:"%", base}, {unit:"?"} (neither) or {unit:"hdr"} (cannot test). */
+function detectDoseAxis(acc, bwRaw, hdrCgy, hdrPct){
+  if (!(bwRaw>0)) return {unit:"hdr"};
+  const set = new Set(); for (const a of acc.values()) for (const v of a.d) if (v>0) set.add(v);
+  const u = [...set].sort((x,y)=>x-y); if (u.length<30) return {unit:"hdr"};
+  const bwGy = hdrCgy ? bwRaw/100 : bwRaw;
+  if (bwGy < 0.004) return {unit:"hdr"};          // bins finer than the printed precision: the grid cannot tell
+  // Random sample for the scan: a regular stride would alias with simple fractions of the true prescription.
+  let seed = 20261111; const rnd = () => (seed = (seed*1103515245 + 12345) & 0x7fffffff) / 0x80000000;
+  const sm = u.length<=500 ? u : Array.from({length:500}, () => u[Math.floor(rnd()*u.length)]);
+  const fit = (arr, f, tol) => { let miss = 0; const lim = arr.length*0.03; for (let i=0;i<arr.length;i++){ const x = arr[i]*f - 0.5; if (Math.abs(x-Math.round(x)) >= tol && ++miss > lim) return false; } return true; };
+  if (!hdrPct && fit(u, 1/bwRaw, 0.1)) return {unit:"Gy"};
+  for (let b=100; b<=12000; b++){          // candidate prescriptions 1.00 … 120.00 Gy, smallest first; confirmed on every dose value
+    const base = b/100, f = base/100/bwGy, tol = Math.max(0.1, 0.0005*base/100/bwGy + 0.04);
+    if (fit(sm, f, tol) && fit(u, f, tol)) return {unit:"%", base};
+  }
+  return {unit:"?"};
+}
+function parseMonaco(text){
+  const lines = text.split(/\r?\n/);
+  const header = lines[0] || "";
+  const rel = /Volume Units:\s*%/i.test(header);
+  const cgy = /Dose Units:\s*cGy/i.test(header), pctHdr = /Dose Units:\s*%/i.test(header);
+  const bwm = header.match(/Bin Width:\s*([\d.,]+)/i), bwRaw = bwm ? parseFloat(bwm[1].replace(",", ".")) : 0;
+  const plan = (header.match(/Plan Name:\s*([^|]+)/i)||[])[1];
+  const pid = (header.match(/Patient ID:\s*([^|]+)/i)||[])[1];
+  const re = /^(.*?)\s+(-?\d+(?:[.,]\d+)?)\s+(-?\d+(?:[.,]\d+)?)\s*$/;
+  const acc = new Map();
+  for (let i=1;i<lines.length;i++){
+    const L = lines[i];
+    if (!L || /^Structure Name/i.test(L)) continue;
+    const m = re.exec(L); if (!m) continue;
+    const name = m[1].trim(); if (!name) continue;
+    const dd = parseFloat(m[2].replace(",", ".")), vv = parseFloat(m[3].replace(",", "."));
+    if (!acc.has(name)) acc.set(name, {d:[],v:[]});
+    const a = acc.get(name); a.d.push(dd); a.v.push(vv);
+  }
+  const dose = detectDoseAxis(acc, bwRaw, cgy, pctHdr);
+  if (dose.unit==="hdr" && pctHdr) dose.unit = "?";
+  const kd = dose.unit==="%" ? dose.base/100 : cgy ? 0.01 : 1;            // file values -> Gy
+  if (kd!==1) for (const a of acc.values()) for (let i=0;i<a.d.length;i++) a.d[i] *= kd;
+  const structs = {};
+  for (const [k,a] of acc) if (a.d.length>1) structs[k] = finishCurve(k, a.d, a.v, rel);
+  return {kind:"Monaco", plan: plan ? plan.trim() : "", pid: pid ? pid.trim() : "", rel, dose, doses:[{label: plan ? plan.trim() : "Plan dose", structs}]};
+}
+function parseRayStation(text){
+  const doses = []; let dose=null, roi=null, unitC=false, pid="";
+  const flush = () => {
+    if (roi && dose && roi.d.length>1){
+      const rel = !(roi.v[0] > 100.5);
+      dose.structs[roi.name] = finishCurve(roi.name, roi.d, roi.v, rel);
+    }
+    roi = null;
+  };
+  for (const raw of text.split(/\r?\n/)){
+    const L = raw.trim(); if (!L) continue;
+    if (L.startsWith("#")){
+      if (/^#PatientId:/i.test(L)) pid = L.split(":").slice(1).join(":").trim();
+      else if (/^#Dosename:/i.test(L)){ flush(); dose = {label:L.slice(10).trim(), structs:{}}; doses.push(dose); }
+      else if (/^#RoiName:/i.test(L)){ flush(); if (!dose){dose={label:"Dose",structs:{}};doses.push(dose);} roi = {name:L.slice(9).trim(), d:[], v:[]}; }
+      else if (/^#Unit:/i.test(L)) unitC = /cGy/i.test(L);
+      continue;
+    }
+    if (!roi) continue;
+    const parts = L.split(/[\t;, ]+/).filter(Boolean);
+    if (parts.length<2) continue;
+    let dd = parseFloat(parts[0]), vv = parseFloat(parts[1]);
+    if (!isFinite(dd)||!isFinite(vv)) continue;
+    if (unitC) dd/=100;
+    roi.d.push(dd); roi.v.push(vv);
+  }
+  flush();
+  return {kind:"RayStation", plan: doses.map(d=>d.label).join(" | "), pid, rel:true, doses};
+}
+function parseAny(text){
+  if (/#RoiName:/i.test(text)) return parseRayStation(text);
+  if (/Structure Name\s*\|/i.test(text) || /Plan Name:/i.test(text)) return parseMonaco(text);
+  throw new Error("Not a recognised Monaco or RayStation DVH export");
+}
+
+/* ================= DVH maths ================= */
+function vAt(c, x){ // % volume receiving >= x Gy
+  const d=c.d, p=c.p, n=d.length;
+  if (x<=d[0]) return p[0];
+  if (x>=d[n-1]) return p[n-1];
+  let lo=0, hi=n-1;
+  while (hi-lo>1){ const m=(lo+hi)>>1; if (d[m]<x) lo=m; else hi=m; }
+  const dx=d[hi]-d[lo]; if (dx<=0) return p[hi];
+  return p[lo]+(p[hi]-p[lo])*(x-d[lo])/dx;
+}
+function dAt(c, pct){ // dose covering pct % of the volume (D100% = minimum dose)
+  const d=c.d, p=c.p, n=d.length;
+  if (p[0] < pct-1e-9) return d[0];
+  for (let i=1;i<n;i++){
+    if (p[i] < pct-1e-9){
+      const dp=p[i-1]-p[i]; if (dp<=0) return d[i-1];
+      return d[i-1]+(d[i]-d[i-1])*(p[i-1]-pct)/dp;
+    }
+  }
+  return d[n-1];
+}
+function meanDose(c){ // area under the cumulative DVH = mean dose
+  const d=c.d, p=c.p, n=d.length;
+  let a = d[0]>0 ? d[0]*(100+p[0])/2 : 0;
+  for (let i=1;i<n;i++) a += (d[i]-d[i-1])*(p[i]+p[i-1])/2;
+  return a/100;
+}
+function maxDose(c){ for (let i=c.d.length-1;i>=0;i--) if (c.p[i]>0) return c.d[Math.min(i+1,c.d.length-1)]; return c.d[c.d.length-1]; }
+
+/* ================= Data access ================= */
+const site = () => SITES[S.site];
+function doseSet(ds){
+  if (!ds) return null;
+  const i = Math.min(ds.sel||0, ds.doses.length-1);
+  return ds.doses[i] ? ds.doses[i].structs : null;
+}
+const FX = () => Array.from({length:S.n}, (_,i)=>S.fx[i]||null);
+const targetKey = () => ((site().structures.find(s=>s.target) || site().structures[0]) || {key:""}).key;
+const labelOf = key => { const st = site().structures.find(s=>s.key===key); return st ? st.label : key; };
+const median = a => { const v=[...a].sort((x,y)=>x-y), m=v.length>>1; return v.length%2 ? v[m] : (v[m-1]+v[m])/2; };
+function findCurve(structs, name){
+  if (!structs || !name) return null;
+  if (structs[name]) return structs[name];
+  const nn = norm(name);
+  for (const k in structs) if (norm(k)===nn) return structs[k];
+  return null;
+}
+function allNames(){
+  const set = new Set();
+  const add = ds => { if (!ds) return; ds.doses.forEach(d => Object.keys(d.structs).forEach(k=>set.add(k))); };
+  add(S.ref); add(S.rigid); add(S.def); FX().forEach(add);
+  return [...set].sort((a,b)=>a.localeCompare(b));
+}
+function autoMap(){
+  const names = allNames();
+  for (const st of site().structures){
+    if (S.mapTouched[st.key] && (S.map[st.key]==="" || names.includes(S.map[st.key]))) continue;
+    const exact = [st.label, st.key, ...(st.aliases||[])].map(norm).filter(Boolean);
+    let hit = names.find(n => exact.includes(norm(n))) || "";
+    if (!hit) for (const re of (st.pats||[])){ const h = names.find(n => re.test(norm(n))); if (h){hit=h;break;} }
+    S.map[st.key] = hit;
+  }
+}
+function refTV(key){ const c = findCurve(doseSet(S.ref), S.map[key]); return c ? c.tv : null; }
+
+/* Export type: 1 for a plan-total export, n for a single-fraction (partial) export */
+function typeScale(i){
+  const ds = S.fx[i]; if (!ds) return 1;
+  const mode = S.fxMode[i] || "auto";
+  if (mode==="total") return 1;
+  if (mode==="partial") return S.n;
+  const c = findCurve(doseSet(ds), S.map[targetKey()]);
+  if (!c || S.n<2) return 1;
+  // A plan total reaches the prescription somewhere in the target however poor the coverage; a single fraction stays near 1/n of it.
+  // The threshold is the geometric midpoint between the hottest single fraction (1.45 Rx/n) and the prescription.
+  return dAt(c, 2)*uk("fx"+i) < S.rx*Math.sqrt(1.45/S.n) ? S.n : 1;
+}
+/* Files set by hand to "% of prescription" (files the app converted itself are already in Gy) */
+const dsOf = slot => slot==="ref" ? S.ref : slot==="def" ? S.def : slot==="rigid" ? S.rigid : S.fx[+slot.slice(2)];
+const pctForced = slot => slot==="ref" ? S.refUnit==="pct" : slot==="def" ? S.defUnit==="pct" : slot==="rigid" ? S.rigCorr==="pct" : S.fxCorr[+slot.slice(2)]==="pct";
+function uk(slot){ const ds = dsOf(slot); return ds && pctForced(slot) && !(ds.dose && ds.dose.unit==="%") ? S.rx/100 : 1; }
+/* Dose-axis factor for fraction i: export type × units set by hand × manual rescale */
+function fxScale(i){ return typeScale(i) * uk("fx"+i) * (S.K.fx[i] || 1); }
+const kRig = () => (S.K.rig || 1) * uk("rigid");
+
+/* Manual overrides. Nothing is rescaled automatically: dose units are settled when a file is read (see detectDoseAxis).
+   By hand, a fraction can be rescaled so its target D50% equals the median of the fractions whose target D95% is within
+   ±15% of the prescription, or excluded; the rigid sum can be rescaled so its target D50% equals the cumulative. */
+/* Target check shared by the data checks and the holds. A target D95% of 80–125 "Gy" against a prescription far from 100 Gy
+   is a relative-dose export read as Gy; for a fraction the same holds for a single-fraction export (raw value × n). */
+const likePct = v => v>=80 && v<=125 && Math.abs(S.rx-100)>20;
+/* Target dose level of a file against the prescription. "off": the whole target sits away from the prescription (units,
+   fraction count or the prescription box). "under": D95% is low but the prescription is still reached inside the target,
+   which is reduced coverage, a property of the plan and not a data problem. */
+function tLevel(c, scale){
+  const d95 = dAt(c,95)*scale, hi = dAt(c,2)*scale, r = d95/S.rx, low = r<0.85, reached = hi/S.rx>=0.90;
+  return {d95, hi, r, off: r>1.15 || (low && !reached), under: low && reached};
+}
+function targetFlag(slot, scale){
+  const ds = dsOf(slot), c = ds && findCurve(doseSet(ds), S.map[targetKey()]); if (!c) return null;
+  const L = tLevel(c, scale); if (!L.off) return L.under ? {under:true, d95:L.d95, hi:L.hi, r:L.r} : null;
+  const raw = dAt(c,95), d95 = L.d95, r = L.r;
+  const canPct = !pctForced(slot) && !(ds.dose && ds.dose.unit==="%");
+  const fxAny = slot.startsWith("fx") && (S.fxMode[+slot.slice(2)] || "auto")!=="total";
+  // a file that agrees with a reference plan read in Gy is not a unit problem: the prescription box is what is off
+  const rc = slot!=="ref" && S.ref && !(S.ref.dose && S.ref.dose.unit==="?") ? findCurve(doseSet(S.ref), S.map[targetKey()]) : null;
+  const refD = rc ? dAt(rc,95)*uk("ref") : null, likeRef = refD!=null && !likePct(refD) && Math.abs(d95/refD-1) <= 0.15;
+  return {d95, r, fxAny, likeRef, pct: canPct && !likeRef && (likePct(raw) || (fxAny && likePct(raw*S.n)))};
+}
+function prep(){
+  const K = {fx:[], excl:[], rig:1, fxInfo:[], rigInfo:null, anchor:null, cumD50:null, hold:{ref:false, rig:false, def:false, fx:[]}};
+  const tname = S.map[targetKey()], fx = FX();
+  const raw = fx.map((ds,i)=>{ const c = ds && findCurve(doseSet(ds), tname); if (!c) return null; const sc = typeScale(i)*uk("fx"+i); return {d95:dAt(c,95)*sc, d50:dAt(c,50)*sc, off:tLevel(c,sc).off}; });
+  const off = r => !!r && r.off;
+  const normals = raw.filter(r=>r && !off(r)).map(r=>r.d50);
+  K.anchor = normals.length>=2 ? median(normals) : null;
+  fx.forEach((ds,i)=>{
+    K.fx[i]=1; K.excl[i]=false; K.fxInfo[i]=null;
+    if (!ds) return;
+    const mode = S.fxCorr[i] || "none", r = raw[i], bad = off(r);
+    if (mode==="exclude"){ K.excl[i]=true; K.fxInfo[i]={mode:"exclude", raw:r, bad}; return; }
+    if (mode==="rescale" && K.anchor && r){ K.fx[i]=K.anchor/r.d50; K.fxInfo[i]={mode:"rescale", auto:false, k:K.fx[i], raw:r, bad}; }
+    else if (bad) K.fxInfo[i]={mode:"none", raw:r, bad};
+  });
+  const isHeld = (slot, scale) => { const f = targetFlag(slot, scale); return !!(f && f.pct); };
+  fx.forEach((ds,i)=>{ K.hold.fx[i] = !!ds && !K.excl[i] && isHeld("fx"+i, typeScale(i)*uk("fx"+i)*K.fx[i]); });
+  const inc = raw.map((r,i)=> r && !K.excl[i] ? r.d50*K.fx[i] : null).filter(v=>v!=null);
+  K.cumD50 = inc.length>=2 && !K.hold.fx.some(Boolean) ? inc.reduce((a,b)=>a+b,0)/inc.length : null;
+  const rc = S.rigid && findCurve(doseSet(S.rigid), tname);
+  if (rc){
+    const ku=uk("rigid"), d95=dAt(rc,95)*ku, d50=dAt(rc,50)*ku, bad=tLevel(rc,ku).off, mode=S.rigCorr||"none";
+    if (mode==="rescale" && K.cumD50){ K.rig=K.cumD50/d50; K.rigInfo={mode:"rescale", auto:false, k:K.rig, d95, d50, bad}; }
+    else if (bad) K.rigInfo={mode:"none", d95, d50, bad};
+  }
+  K.hold.ref = isHeld("ref", uk("ref")); K.hold.rig = isHeld("rigid", K.rig*uk("rigid")); K.hold.def = isHeld("def", uk("def"));
+  S.K = K;
+}
+
+/* Evaluate one constraint on one curve. scale multiplies the dose axis.
+   Types: V = volume receiving ≥ dose; D = dose to the hottest volume; M = mean dose; CV = volume below a dose (parallel organs).
+   Doses can be in Gy or % of the prescription (xu / lu = "%Rx"); volumes in cm³ ("cc") or %. */
+const rxGy = (v, u) => u==="%Rx" ? v*S.rx/100 : v;
+function evalC(c, con, scale, tvFallback){
+  if (!c) return null;
+  const tv = c.tv ?? tvFallback ?? null;
+  if (con.t==="V" || con.t==="CV"){
+    const pct = vAt(c, rxGy(con.x, con.xu)/scale);
+    if (con.t==="CV") return tv ? tv*(1-pct/100) : null;
+    if (con.u==="%") return pct;
+    return tv ? pct*tv/100 : null;
+  }
+  let d;
+  if (con.t==="M") d = meanDose(c)*scale;
+  else {
+    let pct;
+    if (con.vu==="%") pct = con.vol; else { if (!tv) return null; pct = con.vol/tv*100; if (pct>100+1e-6) return null; }
+    d = dAt(c, pct)*scale;
+  }
+  return con.lu==="%Rx" ? d/S.rx*100 : d;
+}
+function status(con, v){
+  if (v==null || !isFinite(v)) return "n";
+  const tol = con.tol || 0;
+  if (con.op===">="){ if (v>=con.lim-1e-9) return "p"; if (tol && v>=con.lim-tol-1e-9) return "m"; return "f"; }
+  if (v<=con.lim+1e-9) return "p"; if (tol && v<=con.lim+tol+1e-9) return "m"; return "f";
+}
+function compute(){
+  const cons = site().constraints, H = S.K.hold;
+  const rows = cons.map(con => {
+    const name = S.map[con.s]; const tvR = refTV(con.s);
+    const ref = H.ref ? null : evalC(findCurve(doseSet(S.ref), name), con, uk("ref"), tvR);
+    const fx = FX();
+    const fxT = fx.map((ds,i) => ds && !S.K.excl[i] && !H.fx[i] ? evalC(findCurve(doseSet(ds), name), con, fxScale(i), tvR) : null);
+    const inc = fx.map((ds,i) => !!ds && !S.K.excl[i]);
+    const vals = fxT.filter((v,i) => inc[i] && v!=null), nInc = inc.filter(Boolean).length;
+    const cum = (fx.every(Boolean) && nInc>0 && vals.length===nInc) ? vals.reduce((a,b)=>a+b,0)/nInc : null;
+    const rig = H.rig ? null : evalC(findCurve(doseSet(S.rigid), name), con, kRig(), tvR);
+    const def = H.def ? null : evalC(findCurve(doseSet(S.def), name), con, uk("def"), tvR);
+    return {con, name, ref, fxT, cum, rig, def};
+  });
+  return rows;
+}
+
+/* ================= Checks ================= */
+function checks(rows){
+  const out = []; const tk = site().structures.find(s=>s.target) || {key:targetKey(), label:labelOf(targetKey())};
+  const loadedFx = FX().filter(Boolean).length;
+  if (!S.ref) out.push(["e","Reference plan DVH not loaded."]);
+  if (loadedFx < S.n) out.push(["e",`${loadedFx} of ${S.n} fraction DVHs loaded. The cumulative column needs all ${S.n}.`]);
+  if (!S.rigid) out.push(["i","Rigid summed DVH not loaded."]);
+  if (!S.def) out.push(["i","Deformable summed DVH not loaded."]);
+  // patient ID consistency
+  const ids = new Map();
+  const reg = (lab, ds) => { if (ds && ds.pid) { if(!ids.has(ds.pid)) ids.set(ds.pid,[]); ids.get(ds.pid).push(lab); } };
+  reg("Reference",S.ref); FX().forEach((d,i)=>reg("Fx"+(i+1),d)); reg("Rigid",S.rigid); reg("Deformable",S.def);
+  if (ids.size>1) out.push(["e","Patient ID differs between files: " + [...ids].map(([k,v])=>`${esc(k)} (${v.join(", ")})`).join(" vs ") + "."]);
+  // duplicate plan names among fractions
+  const pn = new Map();
+  FX().forEach((d,i)=>{ if(d && d.plan){ const k=d.plan; if(!pn.has(k)) pn.set(k,[]); pn.get(k).push(i+1);} });
+  for (const [k,v] of pn) if (v.length>1) out.push(["e",`Fractions ${v.join(" and ")} carry the same plan name “${esc(k)}”. One of them is probably the wrong export.`]);
+  // target dose sanity
+  const tname = S.map[tk.key];
+  const tcheck = (lab, slot, scale) => {
+    const f = targetFlag(slot, scale); if (!f) return;
+    if (f.under){ out.push(["i",`${lab}: ${esc(tk.label)} D95% is ${f.d95.toFixed(2)} Gy, ${(f.r*100).toFixed(0)}% of the prescription, while the prescription dose is reached inside the target (D2% ${f.hi.toFixed(2)} Gy). Read as reduced target coverage, not as a units problem.`]); return; }
+    if (f.pct) out.push(["e",`${lab}: ${esc(tk.label)} D95% reads ${f.d95.toFixed(2)} “Gy” against a ${S.rx} Gy prescription, so this looks like a relative-dose export (dose in % of the prescription). Its values are held back${slot.startsWith("fx")?", and so is the cumulative,":""} until the units are settled. <button class="btn sm" data-pct="${slot}">Read as % of ${S.rx} Gy</button> <span style="color:var(--ink-3)">If the file is in Gy after all, correct the prescription${f.fxAny?" or set this fraction's Type to “Plan total”":""}.</span>`]);
+    else if (!f.likeRef) out.push(["e",`${lab}: ${esc(tk.label)} D95% = ${f.d95.toFixed(2)} Gy, ${(f.r*100).toFixed(0)}% of the ${S.rx} Gy prescription. Check this export (dose units, fraction count or the prescription) before relying on any sum that includes it.`]);
+  };
+  tcheck("Reference", "ref", uk("ref"));
+  FX().forEach((d,i)=>{ if (!S.K.excl[i]) tcheck("Fraction "+(i+1), "fx"+i, fxScale(i)); });
+  tcheck("Rigid sum", "rigid", kRig()); tcheck("Deformable sum", "def", uk("def"));
+  // dose units read from each file
+  [["Reference","ref"], ...FX().map((d,i)=>["Fraction "+(i+1),"fx"+i]), ["Rigid sum","rigid"], ["Deformable sum","def"]].forEach(([lab,slot])=>{
+    const ds = dsOf(slot); if (!ds) return; const du = ds.dose || {};
+    if (du.unit==="%"){
+      out.push(["i",`${lab}: this export holds dose in % of ${du.base} Gy (relative dose), although its header says Gy. Converted to Gy exactly, × ${(du.base/100).toFixed(4)}.`]);
+      if (Math.abs(du.base/S.rx-1) > 0.005) out.push(["w",`${lab}: its doses are % of ${du.base} Gy, but the prescription is set to ${S.rx} Gy. <button class="btn sm" data-setrx="${du.base}">Use ${du.base} Gy</button>`]);
+    } else if (du.unit==="?") out.push(["e",`${lab}: the dose values do not sit on this export's bin grid, either in Gy or as % of a prescription. Check the DVH export settings for this file.`]);
+    if (uk(slot)!==1) out.push(["i",`${lab}: read as % of ${S.rx} Gy, set by hand (× ${(S.rx/100).toFixed(4)}).`]);
+  });
+  // prescription box vs the reference plan
+  const rcT = findCurve(doseSet(S.ref), tname);
+  if (rcT && !(S.ref.dose && S.ref.dose.unit==="?") && !likePct(dAt(rcT,95)*uk("ref"))){ const L = tLevel(rcT, uk("ref")), d95 = L.d95; if (L.r > 1.10 || (L.r < 0.90 && L.hi/S.rx < 0.90)){ const sug = Math.round(d95*4)/4; out.push(["w",`The reference ${esc(tk.label)} D95% is ${d95.toFixed(2)} Gy but the prescription is set to ${S.rx} Gy. The prescription drives the % Rx limits and the export checks. <button class="btn sm" data-setrx="${sug}">Use ${sug} Gy</button>`]); } }
+  // corrections applied to faulty exports
+  const tl = esc(tk.label);
+  S.K.fxInfo.forEach((f,i)=>{
+    if (!f) return;
+    if (f.mode==="rescale") out.push(["w",`Fraction ${i+1}: ${tl} as exported is ${(f.raw.d50/S.K.anchor).toFixed(2)}× the other fractions (D95% ${f.raw.d95.toFixed(2)} Gy). ${f.auto?"Treated as a dose-scaling fault in the export: its":"Its"} dose axis is multiplied by ${f.k.toFixed(4)} so its ${tl} D50% matches the median of the other fractions (${S.K.anchor.toFixed(2)} Gy).${f.auto?` To override, set Dose to “As exported” or “Exclude” on the Fraction ${i+1} slot.`:""}`]);
+    else if (f.mode==="exclude") out.push(["w",`Fraction ${i+1} is excluded. The cumulative uses the mean of the other ${S.K.excl.filter((x,j)=>!x && S.fx[j]).length} fractions in its place.`]);
+  });
+  FX().forEach((d,i)=>{ if (d && S.fxCorr[i]==="rescale" && !S.K.anchor) out.push(["w",`Fraction ${i+1} cannot be rescaled: at least two other fractions need ${tl} D95% within ±15% of the prescription.`]); });
+  const ri = S.K.rigInfo;
+  if (ri && ri.mode==="rescale") out.push(["w",`Rigid sum: ${tl} as exported is ${(ri.d50/S.K.cumD50).toFixed(2)}× the cumulative (D95% ${ri.d95.toFixed(2)} Gy). ${ri.auto?"Treated as a dose-scaling fault in the export: its":"Its"} dose axis is multiplied by ${ri.k.toFixed(4)} so its ${tl} D50% matches the cumulative (${S.K.cumD50.toFixed(2)} Gy). Its target rows then follow the cumulative by construction; its OAR rows remain an independent comparison.${ri.auto?" To override, set Dose to “As exported” on the rigid slot.":""}`]);
+  if (S.rigid && S.rigid.kind==="Monaco" && /\+/.test(S.rigid.plan||"")){ const np = S.rigid.plan.split("+").length; if (np!==S.n) out.push(["w",`Rigid sum plan “${esc(S.rigid.plan)}” combines ${np} plans; expected ${S.n}.`]); }
+  // partial detection info
+  FX().forEach((d,i)=>{ if (d && typeScale(i)!==1) out.push(["i",`Fraction ${i+1} is a single-fraction export; its dose axis is multiplied by ${S.n} to compare with plan totals.`]); });
+  // unmapped
+  const um = site().structures.filter(s=>!S.map[s.key]);
+  const umReq = um.filter(s=>!s.optional).map(s=>s.label), umOpt = um.filter(s=>s.optional).map(s=>s.label);
+  if (umReq.length) out.push(["w",`Not evaluated, no matching structure: ${umReq.map(esc).join(", ")}. Map it in section 7 if it exists under another name.`]);
+  if (umOpt.length) out.push(["i",`Optional structure not in these exports, rows skipped: ${umOpt.map(esc).join(", ")}. Map it in section 7 if it exists under another name.`]);
+  // D(cm³) constraints larger than the structure itself
+  for (const con of site().constraints){
+    if (con.t!=="D" || con.vu!=="cc") continue;
+    const tv = refTV(con.s);
+    if (tv && con.vol > tv) out.push(["w",`${esc(labelOf(con.s))} volume (${tv.toFixed(1)} cm³) is smaller than ${con.vol} cm³, so ${goalText(con)} cannot be evaluated.`]);
+  }
+  // missing structure in some files
+  for (const st of site().structures){
+    const nm = S.map[st.key]; if (!nm) continue;
+    const miss = [];
+    if (S.ref && !findCurve(doseSet(S.ref),nm)) miss.push("Reference");
+    FX().forEach((d,i)=>{ if (d && !findCurve(doseSet(d),nm)) miss.push("Fx"+(i+1)); });
+    if (S.rigid && !findCurve(doseSet(S.rigid),nm)) miss.push("Rigid");
+    if (S.def && !findCurve(doseSet(S.def),nm)) miss.push("Deformable");
+    if (miss.length) out.push(["w",`“${esc(nm)}” is missing from: ${miss.join(", ")}.`]);
+  }
+  // relative-only sources
+  const relFx = []; FX().forEach((d,i)=>{ if (d && d.rel) relFx.push(i+1); });
+  if (relFx.length && S.ref && !S.ref.rel) out.push(["w",`Fraction${relFx.length>1?"s":""} ${relFx.join(", ")}: volumes exported in %. The cm³ limits there use the reference-CT structure volumes, which is exact only when the contours were not changed (ATP). For an ATS fraction load its absolute-volume (cm³) export.`]);
+  if (S.ref && S.ref.rel) out.push(["w","The reference export has volumes in % only, so cm³ limits cannot be evaluated for the reference or for any other %-volume file. Load the absolute-volume (cm³) reference export."]);
+  const relSrc = [];
+  if (S.def && S.def.rel) relSrc.push("deformable sum");
+  if (S.rigid && S.rigid.rel) relSrc.push("rigid sum");
+  if (relSrc.length && S.ref && !S.ref.rel) out.push(["i",`Volumes in % for the ${relSrc.join(" and ")}: cm³ limits use the reference-CT structure volumes (same contours, so this is exact).`]);
+  // structure volume changes (ATS recontouring)
+  const pt = findCurve(doseSet(S.ref), tname);
+  if (pt && pt.tv){
+    const diffs = [];
+    FX().forEach((d,i)=>{ const c=findCurve(doseSet(d),tname); if (c&&c.tv&&Math.abs(c.tv/pt.tv-1)>0.03) diffs.push(`Fx${i+1} ${c.tv.toFixed(1)} cm³`); });
+    if (diffs.length) out.push(["i",`${esc(tk.label)} volume differs from reference (${pt.tv.toFixed(1)} cm³) in ${diffs.join(", ")}. Expected for adapt-to-shape fractions with recontouring.`]);
+  }
+  [["Reference",S.ref],...FX().map((d,i)=>["Fraction "+(i+1),d]),["Rigid sum",S.rigid],["Deformable sum",S.def]].forEach(([lab,d])=>{
+    if (d && d.doses.length>1) out.push(["i",`${lab} file holds ${d.doses.length} dose sets. Using “${esc(d.doses[Math.min(d.sel||0,d.doses.length-1)].label)}”; change it on the slot.`]); });
+  if (!out.some(o=>o[0]!=="i")) out.unshift(["ok","All files loaded and consistent."]);
+  const rank = {e:0, w:1, ok:2, i:3};
+  return out.sort((a,b)=>rank[a[0]]-rank[b[0]]);
+}
+
+/* ================= Formatting ================= */
+function unitOf(con){ if (con.t==="V") return con.u==="%" ? "%" : "cm³"; if (con.t==="CV") return "cm³"; return con.lu==="%Rx" ? "%Rx" : "Gy"; }
+const dLab = (v, u) => u==="%Rx" ? `${v}%Rx` : `${v}Gy`;
+function fmt(v, con){
+  if (v==null || !isFinite(v)) return "—";
+  const u = unitOf(con);
+  if (u==="cm³") return Math.abs(v)<1 ? v.toFixed(3) : v.toFixed(2);
+  return v.toFixed(2);
+}
+function goalText(con){
+  const op = con.op===">=" ? "≥" : "≤";
+  const u = unitOf(con), tol = con.tol ? ` (${con.op===">="?"−":"+"}${con.tol} ${u})` : "";
+  if (con.t==="V") return `V${dLab(con.x,con.xu)} ${op} ${con.lim} ${u==="%"?"%":"cm³"}${tol}`;
+  if (con.t==="CV") return `V<${dLab(con.x,con.xu)} ${op} ${con.lim} cm³${tol}`;
+  if (con.t==="M") return `Dmean ${op} ${con.lim} ${u}${tol}`;
+  return `D${con.vol}${con.vu==="%"?"%":"cm³"} ${op} ${con.lim} ${u}${tol}`;
+}
+function goalPlain(con){ return goalText(con).replace(/cm³/g,"cc").replace(/[≥]/g,">=").replace(/[≤]/g,"<=").replace(/−/g,"-"); }
+const GLYPH = {p:"✓", m:"!", f:"✕", n:""};
+function cell(v, con){ const s=status(con,v); return `<td class="v ${s}">${fmt(v,con)}${s!=="n"?`<span class="g" aria-label="${{p:"met",m:"minor deviation",f:"failed"}[s]}">${GLYPH[s]}</span>`:""}</td>`; }
+function delta(v, b, con){
+  if (v==null || b==null) return `<td class="dl">—</td>`;
+  const d = v-b; if (Math.abs(d)<0.0005) return `<td class="dl">0.00</td>`;
+  const worse = con.op==="<=" ? d>0 : d<0;
+  const t = (d>0?"+":"−") + fmt(Math.abs(d),con);
+  return `<td class="dl ${worse?"bad":"good"}">${t}</td>`;
+}
+
+/* ================= Adaptation (ATP / ATS) and MR series per fraction ================= */
+function autoAdapt(i){
+  const d = S.fx[i]; if (!d || !S.ref) return "";
+  const a = doseSet(d), b = doseSet(S.ref); let n = 0, same = 0;
+  for (const k in a){ const x = a[k], y = findCurve(b, k); if (!y || x.tv==null || y.tv==null) continue; n++; if (Math.abs(x.tv-y.tv) <= Math.max(0.01, 0.001*y.tv)) same++; }
+  return n>=2 ? (same===n ? "ATP" : "ATS") : "";
+}
+function autoSeries(i){ const p = (S.rigid && S.rigid.plan) || ""; const re = /Fr0*(\d+)\s*\[([^\]]+)\]/gi; let m; while ((m = re.exec(p))) if (+m[1]===i+1) return m[2].trim(); return ""; }
+const adaptOf = i => S.fxAdapt[i] ? {v:S.fxAdapt[i], auto:false} : {v:autoAdapt(i), auto:true};
+const seriesOf = i => S.fxSeries[i]!=null ? {v:S.fxSeries[i], auto:false} : {v:autoSeries(i), auto:true};
+
+/* ================= Render ================= */
+function renderSites(){
+  $("sites").innerHTML = Object.entries(SITES).map(([k,s]) =>
+    `<button data-k="${k}" aria-pressed="${k===S.site}" ${s.ready?"":"disabled"}>${esc(s.label)}${s.ready?"":"<small>constraints pending</small>"}</button>`).join("")
+    + `<button class="archlink" id="archLink">Archive · ${ARCH.length}</button>`;
+}
+function slotHTML(id, title, ds, extra){
+  const empty = !ds;
+  const dsel = !empty && ds.doses.length>1 ? `<label class="mini wide">Dose set<select data-dsel="${id}">${ds.doses.map((d,i)=>`<option value="${i}" ${i===(ds.sel||0)?"selected":""}>${esc(d.label)}</option>`).join("")}</select></label>` : "";
+  return `<div class="slot ${empty?"empty":""}" data-slot="${id}">
+    <div class="hd"><span class="nm">${title}</span><span class="chips">${extra.chip||""}</span></div>
+    ${extra.hint?`<div class="meta">${extra.hint}</div>`:""}
+    <div class="fn">${empty ? "No file" : esc(ds.fileName)}</div>
+    ${empty ? "" : `<div class="meta">${esc(ds.kind)} · ${esc(ds.plan||"—")} · ${Object.keys(doseSet(ds)||{}).length} structures${ds.rel?" · %":" · cm³"}</div>`}
+    <div class="ctl"><label class="pick">${empty?"Load":"Replace"}<input type="file" accept=".txt,.dvh,.csv" data-slot="${id}"></label>${dsel}${empty?"":(extra.ctl||"")}${empty?"":`<button class="x" data-clear="${id}">Remove</button>`}</div>
+  </div>`;
+}
+const opts = (map, cur) => Object.entries(map).map(([v,l])=>`<option value="${v}" ${cur===v?"selected":""}>${l}</option>`).join("");
+const normCorr = v => (!v || v==="auto") ? "none" : v;
+function unitChip(slot){
+  const ds = dsOf(slot); if (!ds) return ""; const du = ds.dose || {};
+  if (du.unit==="%") return `<span class="chip warn" title="Exported in % of ${du.base} Gy; converted to Gy exactly">Dose % → Gy</span>`;
+  if (uk(slot)!==1) return `<span class="chip warn">% of Rx, by hand</span>`;
+  if (du.unit==="?") return `<span class="chip err">Check dose units</span>`;
+  return "";
+}
+const pctOpt = slot => { const ds = dsOf(slot); return ds && ds.dose && ds.dose.unit==="%" ? {} : {pct:"Dose is % of Rx"}; };
+function renderSlots(){
+  const parts = [slotHTML("ref","Reference plan",S.ref,{hint:"Plan on the reference CT", chip:unitChip("ref"), ctl:`<label class="mini">Dose<select data-unit="ref">${opts(Object.assign({auto:"As exported"}, pctOpt("ref")), S.refUnit)}</select></label>`})];
+  for (let i=0;i<S.n;i++){
+    const ds = S.fx[i], ts = ds ? typeScale(i) : 1, f = S.K.fxInfo[i];
+    let chip = ds ? `<span class="chip ${ts!==1?"warn":"ok"}">${ts!==1?"Single fx ×"+S.n:"Plan total"}</span>` : "";
+    chip += unitChip("fx"+i);
+    if (ds && f) chip += f.mode==="rescale" ? `<span class="chip warn">Rescaled ×${f.k.toFixed(3)}</span>` : f.mode==="exclude" ? `<span class="chip warn">Excluded</span>` : `<span class="chip err">Check dose</span>`;
+    const ad = adaptOf(i), se = seriesOf(i);
+    const ctl = `<label class="mini">Type<select data-mode="${i}">${opts({auto:"Auto-detect",total:"Plan total",partial:"Single fraction"}, S.fxMode[i]||"auto")}</select></label>
+      <label class="mini">Dose<select data-corr="${i}">${opts(Object.assign({none:"As exported"}, pctOpt("fx"+i), {rescale:"Rescale to others", exclude:"Exclude"}), normCorr(S.fxCorr[i]))}</select></label>
+      <span class="adaptrow"><span class="adapt" role="group" aria-label="Fraction ${i+1} adaptation">${["ATP","ATS"].map(v=>`<button data-adapt="${i}" data-v="${v}" aria-pressed="${ad.v===v}" title="${v==="ATP"?"Adapt to position":"Adapt to shape"}">${v}</button>`).join("")}</span>${ad.v && ad.auto ? `<span class="autotag" title="Suggested from the contour volumes (copied contours = ATP). Click to confirm or change.">auto</span>` : ""}
+      <label class="mini">Series<input data-series="${i}" type="text" value="${esc(se.v)}" placeholder="e.g. MR3" autocomplete="off" spellcheck="false"></label>${se.v && se.auto ? `<span class="autotag" title="Read from the rigid-sum plan name">auto</span>` : ""}</span>`;
+    parts.push(slotHTML("fx"+i, "Fraction "+(i+1), ds, {chip, ctl}));
+  }
+  const ri = S.K.rigInfo;
+  const rchip = unitChip("rigid") + (S.rigid && ri ? (ri.mode==="rescale" ? `<span class="chip warn">Rescaled ×${ri.k.toFixed(3)}</span>` : `<span class="chip err">Check dose</span>`) : "");
+  const rctl = `<label class="mini">Dose<select data-rcorr="1">${opts(Object.assign({none:"As exported"}, pctOpt("rigid"), {rescale:"Rescale to Σ"}), normCorr(S.rigCorr))}</select></label>`;
+  parts.push(slotHTML("rigid","Rigid sum",S.rigid,{chip:rchip, ctl:rctl, hint:"Monaco plan sum on CT, or a RayStation rigid sum"}));
+  parts.push(slotHTML("def","Deformable sum",S.def,{hint:`All ${S.n} fractions deformed to CT (RayStation)`, chip:unitChip("def"), ctl:`<label class="mini">Dose<select data-unit="def">${opts(Object.assign({auto:"As exported"}, pctOpt("def")), S.defUnit)}</select></label>`}));
+  $("slots").innerHTML = parts.join("");
+  $("demoBanner").hidden = !S.demo;
+  const pid = [S.ref,...S.fx,S.rigid,S.def].find(d=>d&&d.pid);
+  $("pidline").innerHTML = pid && !S.demo ? ` · Patient ID <b>${esc(pid.pid)}</b>` : "";
+}
+function renderChecks(rows){
+  const icon = {e:"✕",w:"!",i:"i",ok:"✓"};
+  $("checks").innerHTML = checks(rows).map(([k,t])=>`<li class="${k==="ok"?"":k}"><span class="ic" ${k==="ok"?'style="color:var(--pass)"':""}>${icon[k]}</span><span>${t}</span></li>`).join("");
+}
+const SERIES = [
+  {k:"ref", label:"Reference", color:"var(--s-ref)", dash:true},
+  {k:"cum", label:"Cumulative Σ fx", color:"var(--s-cum)"},
+  {k:"rig", label:"Rigid sum", color:"var(--s-rig)"},
+  {k:"def", label:"Deformable sum", color:"var(--s-def)"}
+];
+function renderVerdicts(rows){
+  const cn = S.K.fxInfo.map((f,i)=> f && f.mode==="rescale" ? `Fx${i+1} rescaled ×${f.k.toFixed(3)}` : f && f.mode==="exclude" ? `Fx${i+1} excluded` : "").filter(Boolean).join(", ");
+  const rr = S.K.rigInfo && S.K.rigInfo.mode==="rescale" ? ` · rescaled ×${S.K.rigInfo.k.toFixed(3)}` : "";
+  const src = {ref:S.ref, cum: FX().every(Boolean) ? {fileName:`${S.n} fraction exports${cn?" · "+cn:""}`} : null, rig: S.rigid ? {fileName:S.rigid.fileName+rr} : null, def:S.def};
+  const H = S.K.hold, heldFx = H.fx.map((h,i)=>h?`Fx${i+1}`:"").filter(Boolean);
+  const holdText = {ref: H.ref ? "Dose units to settle" : "", cum: heldFx.length ? `Waits for ${heldFx.join(", ")}: dose units` : "", rig: H.rig ? "Dose units to settle" : "", def: H.def ? "Dose units to settle" : ""};
+  $("verdicts").innerHTML = SERIES.map(s => {
+    const cnt = {p:0,m:0,f:0,n:0};
+    rows.forEach(r => cnt[status(r.con, r[s.k])]++);
+    const ok = src[s.k];
+    return `<div class="vd"><div class="t"><span class="sw ${s.dash?"dash":""}" style="background:${s.color}"></span>${s.label}</div>
+      ${ok && holdText[s.k] ? `<div class="hold">${holdText[s.k]}</div>` : ok ? `<div class="cnt"><span class="st-p">✓ ${cnt.p}</span><span class="st-m">! ${cnt.m}</span><span class="st-f">✕ ${cnt.f}</span>${cnt.n?`<span style="color:var(--na)">— ${cnt.n}</span>`:""}</div>` : `<div class="cnt" style="color:var(--na)">not loaded</div>`}
+      <div class="src">${ok ? esc(ok.fileName) : ""}</div></div>`;
+  }).join("");
+}
+function renderTable(rows){
+  const share = S.fxView==="share";
+  const baseRef = S.base==="ref";
+  const H = S.K.hold, heldFx = H.fx.map((h,i)=>h?`Fx${i+1}`:"").filter(Boolean), unitsNote = `<div class="hn err">dose units?</div>`;
+  const fxHead = Array.from({length:S.n},(_,i)=>{ const f=S.K.fxInfo[i]; const note = H.fx[i] ? "" : !f ? "" : f.mode==="rescale" ? `×${f.k.toFixed(3)}` : f.mode==="exclude" ? "excluded" : "check";
+    const an = S.fx[i] ? [adaptOf(i).v, seriesOf(i).v].filter(Boolean).join(" · ") : "";
+    return `<th class="${i===0?"grp ":""}fxc">Fx${i+1}${an?`<div class="hn2">${esc(an)}</div>`:""}${note?`<div class="hn">${note}</div>`:""}${H.fx[i]?unitsNote:""}</th>`; }).join("");
+  const rn = S.K.rigInfo && S.K.rigInfo.mode==="rescale" ? `<div class="hn">×${S.K.rigInfo.k.toFixed(3)}</div>` : "";
+  const sw = c => `<span class="sw" style="background:${c}"></span>`;
+  let h = `<thead><tr><th class="l">Structure</th><th class="l">Constraint</th><th>${sw("var(--s-ref)")}Reference${H.ref?unitsNote:""}</th>
+    ${fxHead}
+    <th class="grp">${sw("var(--s-cum)")}Cumulative${heldFx.length?`<div class="hn err">waits for ${heldFx.join(", ")}</div>`:""}</th><th>${sw("var(--s-rig)")}Rigid${rn}${H.rig?unitsNote:""}</th><th>${sw("var(--s-def)")}Deformable${H.def?unitsNote:""}</th>
+    ${baseRef?`<th class="grp">Δ Cum</th>`:""}<th ${baseRef?"":'class="grp"'}>Δ Rigid</th><th>Δ Def</th></tr></thead><tbody>`;
+  let last = "";
+  for (const r of rows){
+    const con = r.con; const newS = con.s!==last; last = con.s;
+    const fxCells = r.fxT.map((v,i) => {
+      if (S.K.excl[i]) return `<td class="v fxc xc">excl.</td>`;
+      if (!share || con.t==="V") return cell(v,con).replace('class="v','class="v fxc');
+      const sv = v==null?null:v/S.n;
+      return `<td class="v fxc">${fmt(sv,con)}</td>`;
+    }).join("");
+    const base = baseRef ? r.ref : r.cum;
+    h += `<tr class="${newS&&rows[0]!==r?"sep":""}"><td class="l st">${newS?esc(labelOf(con.s)):""}${newS && r.name && norm(r.name)!==norm(labelOf(con.s))?`<div style="font:400 11px var(--f-mono);color:var(--ink-3)">${esc(r.name)}</div>`:""}${newS&&!r.name?`<div style="font:400 11px var(--f-body);color:var(--ink-3)">not mapped</div>`:""}</td>
+      <td class="goal">${goalText(con)}</td>${cell(r.ref,con)}${fxCells.replace('<td class="v','<td class="grp v')}
+      ${cell(r.cum,con).replace('class="v','class="grp v')}${cell(r.rig,con)}${cell(r.def,con)}
+      ${baseRef?delta(r.cum,base,con).replace('class="dl','class="grp dl'):""}${baseRef?delta(r.rig,base,con):delta(r.rig,base,con).replace('class="dl','class="grp dl')}${delta(r.def,base,con)}</tr>`;
+  }
+  $("res").innerHTML = h + "</tbody>";
+  $("shareNote").textContent = share ? `Delivered share: dose metrics (Dx, Dmean) ÷ ${S.n} per fraction; Cumulative = their sum. Volume metrics are unchanged (threshold ÷ ${S.n} on the single-fraction dose).${S.K.excl.some(Boolean)?" Excluded fractions are replaced by the mean of the others.":""}` : "";
+}
+
+/* ---------- Plot ---------- */
+function cumCurve(name){
+  const fx = FX(); if (!fx.every(Boolean) || S.K.hold.fx.some(Boolean)) return null;
+  const cs = fx.map((ds,i)=> S.K.excl[i] ? null : {c:findCurve(doseSet(ds),name), s:fxScale(i)}).filter(Boolean);
+  if (!cs.length || cs.some(o=>!o.c)) return null;
+  const mx = Math.max(...cs.map(o=>maxDose(o.c)*o.s));
+  const N=500, d=[], p=[];
+  for (let k=0;k<=N;k++){ const x=mx*k/N; d.push(x); p.push(cs.reduce((a,o)=>a+vAt(o.c,x/o.s),0)/cs.length); }
+  return {d,p,tv:null};
+}
+function renderPlot(){
+  const key = S.plotStruct; const name = S.map[key];
+  const host = $("plot");
+  if (!name){ host.innerHTML = `<p style="color:var(--ink-3)">No structure mapped for ${esc(key||"")}.</p>`; $("plotPts").innerHTML=""; return; }
+  const series = [], HD = S.K.hold;
+  if (S.show.fx) FX().forEach((ds,i)=>{ if (!ds || S.K.excl[i] || HD.fx[i]) return; const c=findCurve(doseSet(ds),name); if(c) series.push({k:"fx",label:"Fx"+(i+1),color:"var(--s-fx)",c,s:fxScale(i),w:1}); });
+  const rc = HD.ref ? null : findCurve(doseSet(S.ref),name); if (rc && S.show.ref) series.push({k:"ref",label:"Reference",color:"var(--s-ref)",c:rc,s:uk("ref"),w:1.75,dash:"5 4"});
+  const rg = HD.rig ? null : findCurve(doseSet(S.rigid),name); if (rg && S.show.rig) series.push({k:"rig",label:"Rigid",color:"var(--s-rig)",c:rg,s:kRig(),w:2});
+  const df = HD.def ? null : findCurve(doseSet(S.def),name); if (df && S.show.def) series.push({k:"def",label:"Deformable",color:"var(--s-def)",c:df,s:uk("def"),w:2});
+  const cc = cumCurve(name); if (cc && S.show.cum) series.push({k:"cum",label:"Cumulative",color:"var(--s-cum)",c:cc,s:1,w:2.25});
+  const W=760,H=400,ml=50,mr=14,mt=12,mb=40, iw=W-ml-mr, ih=H-mt-mb;
+  let xmax = Math.max(1,...series.map(o=>maxDose(o.c)*o.s));
+  xmax = Math.min(xmax, S.rx*1.6) ; xmax = Math.ceil(xmax/5)*5;
+  const X = x=>ml+iw*x/xmax, Y = p=>mt+ih*(1-p/100);
+  let g = "";
+  for (let t=0;t<=xmax;t+=5){ g+=`<line x1="${X(t)}" x2="${X(t)}" y1="${mt}" y2="${mt+ih}" stroke="var(--line)" stroke-width="1"/>`+`<text x="${X(t)}" y="${H-mb+16}" text-anchor="middle" font-size="11" fill="var(--ink-3)" font-family="IBM Plex Mono,monospace">${t}</text>`; }
+  for (let t=0;t<=100;t+=20){ g+=`<line x1="${ml}" x2="${ml+iw}" y1="${Y(t)}" y2="${Y(t)}" stroke="var(--line)" stroke-width="1"/>`+`<text x="${ml-6}" y="${Y(t)+4}" text-anchor="end" font-size="11" fill="var(--ink-3)" font-family="IBM Plex Mono,monospace">${t}</text>`; }
+  g += `<text x="${ml+iw/2}" y="${H-6}" text-anchor="middle" font-size="12" fill="var(--ink-2)">Dose (Gy)</text><text transform="translate(13 ${mt+ih/2}) rotate(-90)" text-anchor="middle" font-size="12" fill="var(--ink-2)">Volume (%)</text>`;
+  // Rx line
+  g += `<line x1="${X(S.rx)}" x2="${X(S.rx)}" y1="${mt}" y2="${mt+ih}" stroke="var(--ink-3)" stroke-dasharray="2 3"/><text x="${X(S.rx)+4}" y="${mt+12}" font-size="11" fill="var(--ink-3)">Rx ${S.rx} Gy</text>`;
+  const paths = series.map(o=>{
+    let dstr=""; const c=o.c;
+    for (let i=0;i<c.d.length;i++){ const x=c.d[i]*o.s; if (x>xmax*1.02) break; dstr+=(dstr?"L":"M")+X(x).toFixed(1)+","+Y(c.p[i]).toFixed(1); }
+    return `<path d="${dstr}" fill="none" stroke="${o.color}" stroke-width="${o.w}" ${o.dash?`stroke-dasharray="${o.dash}"`:""} ${o.k==="fx"?'opacity=".8"':""} stroke-linejoin="round"/>`;
+  }).join("");
+  // constraint markers (% scale, using reference volume for cm³)
+  const tvR = refTV(key); let marks = "";
+  for (const con of site().constraints.filter(c=>c.s===key)){
+    if (con.t==="M") continue;
+    let x,y;
+    if (con.t==="V"){ x=rxGy(con.x,con.xu); y = con.u==="%" ? con.lim : (tvR? con.lim/tvR*100 : null); }
+    else if (con.t==="CV"){ x=rxGy(con.x,con.xu); y = tvR ? (tvR-con.lim)/tvR*100 : null; }
+    else { x=rxGy(con.lim,con.lu); y = con.vu==="%" ? con.vol : (tvR? con.vol/tvR*100 : null); }
+    if (y==null || x>xmax) continue;
+    y=Math.min(100,Math.max(0,y));
+    marks += `<g><circle cx="${X(x)}" cy="${Y(y)}" r="5" fill="var(--panel)" stroke="var(--ink)" stroke-width="1.5"/><title>${goalText(con)}</title></g>`;
+  }
+  host.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="DVH comparison for ${esc(name)}">${g}${paths}${marks}<line id="xh" y1="${mt}" y2="${mt+ih}" stroke="var(--ink-2)" stroke-width="1" visibility="hidden"/><rect id="hit" x="${ml}" y="${mt}" width="${iw}" height="${ih}" fill="transparent"/></svg><div class="tt" id="tt" hidden></div>`;
+  const svg = host.querySelector("svg"), tt=$("tt"), xh=svg.querySelector("#xh");
+  const ordered = ["cum","ref","rig","def"].map(k=>series.find(o=>o.k===k)).filter(Boolean);
+  svg.querySelector("#hit").addEventListener("pointermove", e=>{
+    const r = svg.getBoundingClientRect(); const sx = (e.clientX-r.left)/r.width*W;
+    const dose = Math.max(0,Math.min(xmax,(sx-ml)/iw*xmax));
+    xh.setAttribute("x1",X(dose)); xh.setAttribute("x2",X(dose)); xh.setAttribute("visibility","visible");
+    tt.innerHTML = `<div style="color:var(--ink-2);margin-bottom:3px">${dose.toFixed(2)} Gy</div>` + ordered.map(o=>`<div class="r"><span class="sw" style="background:${o.color}"></span>${o.label}<span style="margin-left:auto;padding-left:10px">${vAt(o.c,dose/o.s).toFixed(2)} %</span></div>`).join("");
+    tt.hidden=false; const px=(X(dose)/W)*r.width; const hr=host.getBoundingClientRect();
+    tt.style.left = (px + 12 + 190 > hr.width ? px-200 : px+12)+"px"; tt.style.top = "10px";
+  });
+  svg.querySelector("#hit").addEventListener("pointerleave", ()=>{ tt.hidden=true; xh.setAttribute("visibility","hidden"); });
+  // side points
+  const rows = compute().filter(r=>r.con.s===key);
+  $("plotPts").innerHTML = `<div style="font:600 12px var(--f-display);letter-spacing:.05em;text-transform:uppercase;color:var(--ink-2);border:0">Cumulative vs goal</div>` +
+    rows.map(r=>`<div><span>${goalText(r.con)}</span><span class="st-${status(r.con,r.cum)}">${fmt(r.cum,r.con)}</span></div>`).join("") +
+    (tvR?`<div style="border:0;color:var(--ink-3)"><span>Reference volume</span><span>${tvR.toFixed(2)} cm³</span></div>`:"");
+}
+function renderSeriesToggles(){
+  const all = [...SERIES, {k:"fx",label:"Individual fractions",color:"var(--s-fx)"}];
+  $("seriesToggles").innerHTML = all.map(s=>`<label><input type="checkbox" data-ser="${s.k}" ${S.show[s.k]?"checked":""}><span class="sw" style="background:${s.color};${s.dash?"background:repeating-linear-gradient(90deg,var(--s-ref) 0 4px,transparent 4px 7px)":""}"></span>${s.label}</label>`).join("");
+}
+function renderPlotSelect(){
+  const sts = site().structures;
+  if (!S.plotStruct || !sts.find(s=>s.key===S.plotStruct)) S.plotStruct = (sts.find(s=>s.key===site().plotDefault)||sts[0]).key;
+  $("plotStruct").innerHTML = sts.map(s=>`<option value="${esc(s.key)}" ${s.key===S.plotStruct?"selected":""}>${esc(s.label)}${S.map[s.key]?"":" (not mapped)"}</option>`).join("");
+}
+function renderMap(){
+  const names = allNames(), st0 = site();
+  $("setState").innerHTML = (CUSTOM[S.site] ? `<span class="chip warn">Edited on this computer</span>` : `<span class="chip ok">Published defaults</span>`) + ` <span class="setcount">${esc(st0.label)} · ${st0.structures.length} organs · ${st0.constraints.length} constraints</span>`;
+  const used = [...new Set(st0.constraints.map(c=>c.src).filter(Boolean))];
+  $("srcNote").innerHTML = (st0.rxNote ? `<p>${esc(st0.rxNote)}</p>` : "") + (used.length ? `<p><b>Sources:</b> ${used.map(k=>esc(srcText(k))).join(" · ")}</p>` : "");
+  $("editToggle").setAttribute("aria-pressed", String(S.editMode)); $("editToggle").textContent = S.editMode ? "Done editing" : "Edit constraints";
+  $("mapWrap").hidden = S.editMode; $("editor").hidden = !S.editMode;
+  if (S.editMode){ renderEditor(names); return; }
+  $("map").innerHTML = `<thead><tr><th>Organ</th><th>Role</th><th>Structure in exports</th><th>Constraints</th><th>Reference volume</th><th>Found in</th></tr></thead><tbody>` +
+    st0.structures.map(st=>{
+      const nm = S.map[st.key]; const tv = refTV(st.key);
+      const found = []; if (nm){ if(findCurve(doseSet(S.ref),nm)) found.push("Ref"); S.fx.forEach((d,i)=>{if(findCurve(doseSet(d),nm)) found.push("Fx"+(i+1));}); if(findCurve(doseSet(S.rigid),nm)) found.push("Rigid"); if(findCurve(doseSet(S.def),nm)) found.push("Def"); }
+      const cons = st0.constraints.filter(c=>c.s===st.key).map(goalText);
+      return `<tr><td style="font-weight:600">${esc(st.label)}</td><td style="font-size:12px;color:var(--ink-2)">${st.target?"Target":"OAR"}${st.optional?" · optional":""}</td><td><select data-map="${esc(st.key)}" aria-label="Structure for ${esc(st.label)}"><option value="">— not evaluated</option>${names.map(n=>`<option ${n===nm?"selected":""}>${esc(n)}</option>`).join("")}</select></td>
+      <td class="clist">${cons.length ? cons.map(esc).join("<br>") : "—"}</td>
+      <td style="font-family:var(--f-mono)">${tv?tv.toFixed(2)+" cm³":"—"}</td><td style="font-size:12px;color:var(--ink-2)">${found.join(" · ")||"—"}</td></tr>`;
+    }).join("") + "</tbody>";
+}
+const CDEF = { V:{x:20, xu:"Gy", op:"<=", lim:1, u:"cc"}, D:{vol:0.035, vu:"cc", op:"<=", lim:30, lu:"Gy"}, M:{op:"<=", lim:10, lu:"Gy"}, CV:{x:15, xu:"Gy", op:">=", lim:700} };
+const uOpt = (pairs, cur) => pairs.map(([v,l])=>`<option value="${v}" ${v===cur?"selected":""}>${l}</option>`).join("");
+function renderEditor(names){
+  const st0 = site();
+  const conRow = (c, idx) => {
+    const t = c.t, at = (t==="V"||t==="CV") ? c.x : t==="D" ? c.vol : "";
+    const atU = t==="D" ? uOpt([["cc","cm³"],["%","%"]], c.vu||"cc") : uOpt([["Gy","Gy"],["%Rx","% Rx"]], c.xu||"Gy");
+    const limU = t==="V" ? uOpt([["cc","cm³"],["%","%"]], c.u||"cc") : t==="CV" ? uOpt([["cc","cm³"]],"cc") : uOpt([["Gy","Gy"],["%Rx","% Rx"]], c.lu||"Gy");
+    return `<tr data-ci="${idx}">
+      <td><select data-c="t" aria-label="Metric">${uOpt([["V","V · volume receiving ≥ dose"],["D","D · dose to hottest volume"],["M","Dmean"],["CV","Volume below dose"]], t)}</select></td>
+      <td class="pair">${t==="M" ? `<span class="na">—</span>` : `<input data-c="at" type="number" step="any" value="${at}" aria-label="${t==="D"?"Volume":"Dose threshold"}"><select data-c="atu" aria-label="Unit">${atU}</select>`}</td>
+      <td><select data-c="op" aria-label="Goal">${uOpt([["<=","≤"],[">=","≥"]], c.op)}</select></td>
+      <td class="pair"><input data-c="lim" type="number" step="any" value="${c.lim}" aria-label="Limit"><select data-c="limu" aria-label="Limit unit">${limU}</select></td>
+      <td><input data-c="tol" type="number" step="any" min="0" value="${c.tol||""}" placeholder="—" aria-label="Minor-deviation tolerance"></td>
+      <td><input data-c="src" class="srcin" type="text" value="${esc(srcText(c.src))}" aria-label="Source"></td>
+      <td><button class="x" data-cdel="${idx}">Remove</button></td></tr>`;
+  };
+  const cards = st0.structures.map(st => {
+    const rows = st0.constraints.map((c,idx)=>({c,idx})).filter(o=>o.c.s===st.key);
+    return `<div class="ocard" data-key="${esc(st.key)}">
+      <div class="orow">
+        <label class="fld2">Organ<input data-f="label" type="text" value="${esc(st.label)}"></label>
+        <label class="fld2">Role<select data-f="role">${uOpt([["oar","Organ at risk"],["target","Target"]], st.target?"target":"oar")}</select></label>
+        <label class="chk"><input type="checkbox" data-f="optional" ${st.optional?"checked":""}>Optional</label>
+        <label class="fld2 grow">Also matches<input data-f="aliases" type="text" value="${esc((st.aliases||[]).join(", "))}" placeholder="other names used in your exports, comma-separated"></label>
+        <label class="fld2">In these exports<select data-f="map"><option value="">— not evaluated</option>${names.map(n=>`<option ${n===S.map[st.key]?"selected":""}>${esc(n)}</option>`).join("")}</select></label>
+        <button class="x" data-orgdel="${esc(st.key)}">Remove organ</button>
+      </div>
+      ${rows.length ? `<div class="ctab-wrap"><table class="ctab"><thead><tr><th>Metric</th><th>At</th><th>Goal</th><th>Limit</th><th>Minor tolerance</th><th>Source</th><th></th></tr></thead><tbody>${rows.map(o=>conRow(o.c,o.idx)).join("")}</tbody></table></div>` : `<p class="na">No constraints for this organ yet.</p>`}
+      <button class="x add" data-cadd="${esc(st.key)}">+ Add constraint</button>
+    </div>`;
+  }).join("");
+  $("editor").innerHTML = `<div class="erow"><label class="fld2">Default prescription (Gy)<input data-sf="rx" type="number" step="0.01" min="1" value="${st0.rx}"></label><label class="fld2">Default fractions<input data-sf="n" type="number" step="1" min="1" max="10" value="${st0.n}"></label>
+    <span class="enote">Changes apply at once and are saved on this computer. "% Rx" limits follow the prescription in section 1. The first target is used for the dose checks and the faulty-export correction.</span></div>${cards}
+    <div class="erow"><button class="btn ghost" id="orgAdd">+ Add organ</button></div>`;
+}
+function editSite(fn){
+  const k = S.site, ser = CUSTOM[k] ? CUSTOM[k] : serSite(SITES[k]);
+  fn(ser); CUSTOM[k] = ser; saveSets(); rebuildSites(); renderAll();
+}
+function onEditorChange(t){
+  const card = t.closest(".ocard"), key = card ? card.dataset.key : null;
+  const num = v => { const x = parseFloat(v); return isFinite(x) ? x : null; };
+  if (t.dataset.sf){
+    const v = num(t.value); if (!(v>0)){ toast("Enter a positive number."); renderMap(); return; }
+    const nv = t.dataset.sf==="n" ? Math.max(1, Math.min(10, Math.round(v))) : v;
+    if (t.dataset.sf==="rx") S.rx = nv; else S.n = nv;
+    editSite(ser => { ser[t.dataset.sf] = nv; });
+    return;
+  }
+  if (t.dataset.f){
+    const f = t.dataset.f;
+    if (f==="map"){ S.map[key] = t.value; S.mapTouched[key] = true; renderAll(); return; }
+    if (f==="label" || f==="aliases") S.mapTouched[key] = false;
+    editSite(ser => { const st = ser.structures.find(x=>x.key===key); if (!st) return;
+      if (f==="label") st.label = t.value.trim() || st.label;
+      else if (f==="role") st.target = t.value==="target";
+      else if (f==="optional") st.optional = t.checked;
+      else if (f==="aliases") st.aliases = t.value.split(",").map(x=>x.trim()).filter(Boolean);
+    });
+    return;
+  }
+  if (t.dataset.c){
+    const idx = +t.closest("tr").dataset.ci, f = t.dataset.c;
+    editSite(ser => { const c = ser.constraints[idx]; if (!c) return;
+      if (f==="t"){ const keep = {s:c.s, src:c.src}; Object.keys(c).forEach(k=>delete c[k]); Object.assign(c, keep, {t:t.value}, CDEF[t.value]); }
+      else if (f==="at"){ const v = num(t.value); if (v==null) return; if (c.t==="D") c.vol = v; else c.x = v; }
+      else if (f==="atu"){ if (c.t==="D") c.vu = t.value; else c.xu = t.value; }
+      else if (f==="op") c.op = t.value;
+      else if (f==="lim"){ const v = num(t.value); if (v!=null) c.lim = v; }
+      else if (f==="limu"){ if (c.t==="V") c.u = t.value; else if (c.t!=="CV") c.lu = t.value; }
+      else if (f==="tol"){ const v = num(t.value); if (v && v>0) c.tol = v; else delete c.tol; }
+      else if (f==="src") c.src = t.value.trim();
+    });
+  }
+}
+function exportSet(){
+  const st = site();
+  const obj = {app:"Adaptive Cumulative DVH", kind:"constraint-set", format:1, appVersion:APP_VERSION, site:S.site, siteLabel:st.label, exported:new Date().toISOString(), edited:!!CUSTOM[S.site], set:serSite(st)};
+  saveFile(stampName(`Constraint set ${st.label}`) + ".json", JSON.stringify(obj, null, 1), "application/json");
+}
+async function importSet(file){
+  let obj; try { obj = JSON.parse(await file.text()); } catch(_){ toast("That file is not a readable constraint set."); return; }
+  const set = obj && obj.set, k = obj && obj.site;
+  if (!set || !Array.isArray(set.structures) || !Array.isArray(set.constraints) || !SITES_DEF[k]){ toast("No constraint set for a known site in that file."); return; }
+  CUSTOM[k] = set; saveSets(); rebuildSites();
+  if (k !== S.site){ S.site = k; S.rx = site().rx; S.n = site().n; S.plotStruct = null; if (S.demo) demo(); }
+  S.mapTouched = {}; renderAll(); toast(`Imported the ${SITES[k].label} constraint set.`);
+}
+function renderMethod(){
+  $("method").innerHTML = `
+  <p><b>What each fraction export means.</b> On the MR-Linac each adapted plan is calculated as a full course (${S.n} × the fraction dose) on that day's anatomy, and one fraction of it is delivered. The plan-total DVH therefore represents the course <em>as if</em> every fraction looked like that day.</p>
+  <p><b>Cumulative (Σ of delivered fractions).</b> Each fraction contributes one ${S.n}th of its plan total. For dose metrics (D95%, D0.035cm³) this is <code>Σ (D<sub>i,total</sub> ÷ ${S.n})</code>, the sum of the per-fraction doses. For volume metrics (V<sub>X Gy</sub>) the per-fraction threshold is X ÷ ${S.n} on the single-fraction dose, which equals V<sub>X Gy</sub> on the plan total; the cumulative value is the mean of the ${S.n} fraction values, <code>(1/${S.n}) Σ V<sub>i</sub>(X)</code>, in % or cm³ as the constraint is written. Single-fraction (“partial”) exports are accepted and multiplied by ${S.n} on the dose axis. The cumulative DVH curve in section 6 is the mean of the fraction curves on a common dose grid.</p>
+  <p><b>Mean and minimum dose.</b> Dmean is the area under each cumulative DVH; it adds exactly across fractions, so the cumulative Dmean is <code>Σ (Dmean<sub>i,total</sub> ÷ ${S.n})</code>. D100% is the minimum dose, read as the highest dose that still covers the whole structure. Added across fractions it is a lower bound of the true cumulative minimum when the same voxels form the structure in every fraction, so it errs on the conservative side.</p>
+  <p><b>Assumption.</b> This is DVH-parameter summation, not voxel accumulation. It assumes the same voxels form the high-dose region of a structure in every fraction. It is exact for a structure that does not move or deform relative to the dose, and approximate otherwise; the rigid and deformable sums are the independent check of that assumption.</p>
+  <p><b>Rigid and deformable sums.</b> Both are evaluated on the reference CT contours. The rigid sum is the Monaco plan sum of the ${S.n} fractions on the reference CT; a rigid accumulation made in RayStation can be loaded in its place. The deformable sum is all ${S.n} fraction doses deformed to the reference CT in RayStation (ANACONDA) and added. RayStation exports give volume in %; cm³ constraints there use the reference CT volume of the mapped structure.</p>
+  <p><b>Dose units.</b> Monaco writes “Dose Units: Gy” in the header even when the DVH was exported in relative dose, that is in % of the prescription. The app therefore reads the units from the data: a Gy export has every dose value at a bin centre of the bin width given in the header; a relative-dose export reaches that grid only after multiplying by prescription ÷ 100, and the smallest prescription that does so is the file's 100% dose. Such a file is converted to Gy exactly and marked “Dose % → Gy”. Where the grid cannot decide (bins finer than 0.004 Gy, or a prescription of 20, 33.33 or 100 Gy), a file whose target reads about 100 is held back: none of its values are reported, and no cumulative is formed from it, until it is read as % of the prescription with one click (or its Dose menu is set to “Dose is % of Rx”). Nothing is rescaled automatically. By hand, a fraction can be rescaled to the other fractions or excluded, in which case the mean of the remaining fractions stands in for it, and the rigid sum can be rescaled to the cumulative.</p>
+  <p><b>Volume units.</b> An absolute (cm³) export carries each structure's own volume. A relative (%) export does not, so its cm³ limits use the reference-CT volume of the structure: exact for ATP fractions and for sums evaluated on the reference CT, approximate for ATS fractions, where the contours and volumes changed. Limits written in % are the same from either export.</p>
+  <p><b>One fraction from a plan total.</b> A plan-total value divided by ${S.n} is that day's delivered fraction, and the cumulative is the sum of the ${S.n} delivered fractions. A single-fraction (“partial”) export is the same quantity read directly; the two agree within one dose bin. An export is taken as a single fraction when the target's near-maximum dose (D2%) stays near one ${S.n}th of the prescription; a plan total reaches the prescription somewhere in the target even when coverage is reduced. The Type menu on each fraction overrides this. “Delivered share” in section 4 shows each fraction's one-fraction value and their sum.</p>
+  <p><b>Interpolation.</b> V<sub>X</sub> is linearly interpolated between DVH dose bins. D<sub>v</sub> is the highest dose that still covers volume v. Values may differ from the planning system's own statistics by up to one dose bin.</p>
+  <p><b>Constraint sets.</b> Prostate and liver start from the department's Monaco templates. Lung, pancreas, renal, adrenal, bone and stomach start from published 5-fraction limits: AAPM TG-101 for organs at risk (point doses read as D0.035cm³; the "volume below dose" rows are TG-101's parallel-organ limits, e.g. at least 1500 cm³ of lung below 12.5 Gy), HyTEC for the spinal-cord maximum, the UK 2022 SABR consensus for lung V20Gy, and the SMART trial for GI organs in MR-guided pancreas SBRT. ASTRO guidelines give dose recommendations but no organ-at-risk tables. Target rows follow a common SBRT convention (PTV V100% Rx ≥ 95%, PTV D99% ≥ 90% Rx, GTV/ITV D98% ≥ 100% Rx). Every organ and limit can be changed in section 7; "% Rx" limits follow the prescription in section 1. An edited set is saved on this computer, can be exported to another one, and is noted with each archived case.</p>
+  <p><b>Adaptation.</b> Each fraction can be tagged ATP (adapt to position) or ATS (adapt to shape) with its MR series. The app suggests ATP when every structure volume equals the reference (contours copied unchanged) and ATS otherwise, and reads series names from the rigid-sum plan name, e.g. Fr04[MR8xT]. Both are stored with archived cases and exported for statistics.</p>
+  <p><b>Case archive.</b> A saved case keeps the constraint values of every method, the per-fraction values, structure metrics (Dmean, D0.035cm³, D2%, D50%, D98%, volume), the dose units read from each file, the corrections applied and the data-check warnings. A case archived before v1.5 with a relative-dose export in it is marked “re-save”: it is flagged in the exports and left out of the Summary statistics until its files are reloaded and the case replaced. It does not keep the DVH curves. The archive is stored in this program on this computer; back it up to a .json file regularly and restore it on another computer if needed.</p>
+  <p><b>Status.</b> Met if the goal holds; minor deviation if it fails but stays within the bracketed tolerance; failed otherwise. Δ columns are coloured red when the change moves toward failure (higher dose or volume for ≤ goals, lower for ≥ goals).</p>`;
+}
+function renderAll(){
+  const pid0 = currentPid();
+  if (pid0 !== S.lastPid){ S.lastPid = pid0; S.labelAuto = true; S.fxAdapt = []; S.fxSeries = []; $("caseNotes").value = ""; $("saveMsg").innerHTML = ""; }
+  autoMap(); prep();
+  $("rx").value = S.rx; $("nfx").value = S.n;
+  renderSites(); renderSlots();
+  const rows = compute();
+  renderChecks(rows); renderVerdicts(rows); renderTable(rows);
+  renderPlotSelect(); renderSeriesToggles(); renderPlot(); renderMap(); renderMethod();
+  if (S.labelAuto) $("caseLabel").value = S.demo ? "" : pid0;
+  $("saveCase").disabled = S.demo;
+  $("saveCase").title = S.demo ? "Load a real case to save it; the demo is not archived." : "";
+}
+
+/* ================= Loading ================= */
+function readFile(f){ return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=()=>rej(r.error); r.readAsText(f,"latin1"); }); }
+async function loadInto(slot, f){
+  const text = await readFile(f);
+  let ds; try { ds = parseAny(text); } catch(e){ toast(`${f.name}: ${e.message}`); return false; }
+  ds.fileName = f.name;
+  if (S.demo) clearAll(false);
+  if (ds.doses.length>1){ const j = ds.doses.findIndex(d=>/summed|accum|deform|rigid/i.test(d.label)); ds.sel = (slot==="def"||slot==="rigid") ? (j>=0?j:ds.doses.length-1) : 0; }
+  if (slot==="ref") S.ref=ds;
+  else if (slot==="rigid") S.rigid=ds;
+  else if (slot==="def") S.def=ds;
+  else if (slot.startsWith("fx")) S.fx[+slot.slice(2)] = ds;
+  resetSlot(slot);
+  return true;
+}
+/* Dose and type settings belong to the file they were set for; a new file in the slot starts from "as exported". */
+function resetSlot(slot){
+  if (slot==="ref") S.refUnit="auto"; else if (slot==="def") S.defUnit="auto"; else if (slot==="rigid") S.rigCorr="none";
+  else if (slot.startsWith("fx")){ const i=+slot.slice(2); S.fxCorr[i]="none"; S.fxMode[i]="auto"; }
+}
+function classify(name){
+  const n = name.toLowerCase();
+  if (/rigid/.test(n)) return {slot:"rigid"};
+  if (/deform|dir\b|\.dvh$/.test(n)) return {slot:"def"};
+  if (/ref|plan\s*ct|reference/.test(n)) return {slot:"ref"};
+  const m = n.match(/f(?:r|x|raction)?[\s_-]*0*(\d{1,2})/);
+  if (m){ const k=+m[1]-1; return {slot:"fx"+k, partial:/part|parit|single|1fx/.test(n)}; }
+  return null;
+}
+async function loadMany(files){
+  let ok=0, skipped=[];
+  for (const f of files){
+    const c = classify(f.name);
+    if (!c){ skipped.push(f.name); continue; }
+    if (c.slot.startsWith("fx")){ const k=+c.slot.slice(2); if (k>=S.n){ skipped.push(f.name); continue; } }
+    if (await loadInto(c.slot, f)){ ok++; if (c.slot.startsWith("fx") && c.partial!=null) S.fxMode[+c.slot.slice(2)] = c.partial ? "partial" : "auto"; }
+  }
+  renderAll();
+  toast(`Loaded ${ok} file${ok===1?"":"s"}` + (skipped.length?`. Not recognised: ${skipped.join(", ")}`:""));
+}
+function clearAll(render=true){ S.ref=S.rigid=S.def=null; S.fx=[]; S.fxMode=[]; S.fxCorr=[]; S.rigCorr="none"; S.refUnit="auto"; S.defUnit="auto"; S.fxAdapt=[]; S.fxSeries=[]; S.demo=false; S.mapTouched={}; if(render) renderAll(); }
+
+/* ================= Export ================= */
+function tableRows(){
+  const rows = compute();
+  const fxh = Array.from({length:S.n},(_,i)=>{ const q=S.K.fxInfo[i]; return "Fx"+(i+1)+" total"+(q&&q.mode==="rescale"?` (rescaled x${q.k.toFixed(4)})`:q&&q.mode==="exclude"?" (excluded)":""); });
+  const rh = "Rigid"+(S.K.rigInfo&&S.K.rigInfo.mode==="rescale"?` (rescaled x${S.K.rigInfo.k.toFixed(4)})`:"");
+  const head = ["Structure","Mapped as","Constraint","Unit","Reference",...fxh,"Cumulative",rh,"Deformable","Status Ref","Status Cum","Status Rigid","Status Def"];
+  const st = (c,v)=>({p:"Met",m:"Minor",f:"Fail",n:"NA"}[status(c,v)]);
+  const f = (v,c)=>v==null?"":fmt(v,c);
+  const body = rows.map(r=>[r.con.s, r.name||"", goalPlain(r.con), unitOf(r.con).replace("cm³","cc"), f(r.ref,r.con), ...r.fxT.map((v,i)=>S.K.excl[i]?"excl.":f(v,r.con)), f(r.cum,r.con), f(r.rig,r.con), f(r.def,r.con), st(r.con,r.ref), st(r.con,r.cum), st(r.con,r.rig), st(r.con,r.def)]);
+  return [head, ...body];
+}
+function toast(t){ const el=$("toast"); el.textContent=t; el.hidden=false; clearTimeout(toast._t); toast._t=setTimeout(()=>el.hidden=true, 3200); }
+
+/* ================= Synthetic demo ================= */
+function autoDemoSpec(){   // generic synthetic DVHs for sites without a tailored demo
+  const rx = S.rx;
+  return site().structures.map(st => {
+    const nm = (st.label+" "+st.key).toLowerCase();
+    if (st.target) return [st.key, 40, [[1, rx*1.09, rx*0.025]], rx*1.3, rx*0.9, 1];
+    if (/^(i?gtv|itv)/.test(st.key.toLowerCase())) return [st.key, 15, [[1, rx*1.1, rx*0.02]], rx*1.3, rx*0.99, 1];
+    const tv = /lung/.test(nm) ? 3500 : /liver/.test(nm) ? 1500 : /kidney/.test(nm) ? 300 : /skin/.test(nm) ? 2500 : /heart/.test(nm) ? 600 : /bowel|colon|stomach|duoden|rectum|bladder/.test(nm) ? 80 : 40;
+    if (/cord|cauda|plexus/.test(nm)) return [st.key, tv, [[.9, rx*0.06, rx*0.04], [.1, rx*0.18, rx*0.06]], rx*0.42, 0, 0];
+    return [st.key, tv, [[.85, rx*0.08, rx*0.05], [.15, rx*0.25, rx*0.07]], rx*0.6, 0, 0];
+  });
+}
+function demo(){
+  const sig=(d,mu,s)=>1/(1+Math.exp((d-mu)/s));
+  const spec = site().demo || autoDemoSpec();
+  const xmax = Math.ceil(S.rx*1.7);
+  const make = (shift, tvMul, rel) => {
+    const structs = {};
+    for (const [nm,tv0,comps,cut,dmin0,isT] of spec){
+      const tv=tv0*tvMul, sh = isT ? shift*0.25 : shift, dmin = dmin0 ? dmin0+sh : 0;
+      const base = x => { let v=0; for (const [w,mu,s] of comps) v+=w*sig(x,mu+sh,s); if (cut) v*=sig(x,cut+shift*0.3,.35); return v; };
+      const b0 = base(dmin), d=[], p=[];
+      for (let k=0;k*0.05<=xmax;k++){ const x=k*0.05; d.push(+x.toFixed(3)); p.push(x<=dmin ? 100 : Math.min(100, base(x)/b0*100)); }
+      structs[nm] = {name:nm,d,p,tv: rel?null:tv};
+    }
+    return structs;
+  };
+  const ds = (label, structs, extra={}) => Object.assign({kind:"Synthetic", plan:label, pid:"", rel:false, fileName:"demo – "+label, doses:[{label, structs}]}, extra);
+  clearAll(false);
+  S.ref = ds("Reference", make(0,1,false));
+  const shifts=[.4,-.3,.9,-.6,.2], tvm=[.95,1,1,1.06,1];
+  S.fx = shifts.map((sh,i)=>ds("ADT0"+(i+1), make(sh,tvm[i],false)));
+  S.rigid = ds("Rigid sum", make(1.1,1,false));
+  const defStructs = make(.15,1,true);
+  S.def = Object.assign(ds("Deformable sum", defStructs), {kind:"Synthetic (RayStation-style %)", rel:true});
+  S.demo = true; S.mapTouched={};
+}
+
+
+/* ================= Saving files: claude.ai downloads capability, else a normal download ================= */
+let DL = null;
+(async () => { try { if (window.claude && typeof window.claude.use === "function") DL = await window.claude.use("downloads"); } catch(_){ DL = null; } })();
+async function saveFile(filename, data, mime){
+  if (DL){
+    try { await DL.save({filename, data}); toast("Saved " + filename); return; }
+    catch(e){
+      const c = e && e.code;
+      if (c==="declined"){ toast("Save cancelled."); return; }
+      if (c==="rate_limited"){ toast("A save prompt is already open."); return; }
+      if (c==="too_large"){ toast("This file is too large to save here."); return; }
+    }
+  }
+  const blob = data instanceof Blob ? data : new Blob([data], {type: mime || "application/octet-stream"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a"); a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 15000);
+  if (!topLevel) toast("If nothing downloaded, use the desktop program or the website version.");
+}
+function toCsv(rows){ return rows.map(r=>r.map(c=>{ if (c==null) return ""; const v=String(c); return /[",\r\n]/.test(v) ? `"${v.replace(/"/g,'""')}"` : v; }).join(",")).join("\r\n"); }
+
+/* ================= Minimal XLSX writer (stored ZIP + SpreadsheetML, no library) ================= */
+const XLSX = (() => {
+  const enc = new TextEncoder(), T = new Uint32Array(256);
+  for (let n=0;n<256;n++){ let c=n; for (let k=0;k<8;k++) c = (c & 1) ? (0xEDB88320 ^ (c>>>1)) : (c>>>1); T[n]=c>>>0; }
+  const crc32 = u => { let c = 0xFFFFFFFF; for (let i=0;i<u.length;i++) c = T[(c ^ u[i]) & 0xFF] ^ (c>>>8); return (c ^ 0xFFFFFFFF)>>>0; };
+  const x = v => String(v).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/g,"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+  const col = i => { let r=""; i++; while (i>0){ const m=(i-1)%26; r=String.fromCharCode(65+m)+r; i=Math.floor((i-1)/26); } return r; };
+  const HEAD = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n';
+  const NS = 'http://schemas.openxmlformats.org/';
+  const STYLES = HEAD + `<styleSheet xmlns="${NS}spreadsheetml/2006/main"><fonts count="2"><font><sz val="11"/><name val="Calibri"/><family val="2"/></font><font><b/><sz val="11"/><name val="Calibri"/><family val="2"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`;
+  function zip(files){
+    const d = new Date(), time = (d.getHours()<<11)|(d.getMinutes()<<5)|(d.getSeconds()>>1), date = ((d.getFullYear()-1980)<<9)|((d.getMonth()+1)<<5)|d.getDate();
+    const parts = [], cen = []; let off = 0;
+    for (const f of files){
+      const name = enc.encode(f.name), data = enc.encode(f.data), crc = crc32(data);
+      const h = new DataView(new ArrayBuffer(30));
+      h.setUint32(0,0x04034b50,true); h.setUint16(4,20,true); h.setUint16(6,0x0800,true); h.setUint16(8,0,true);
+      h.setUint16(10,time,true); h.setUint16(12,date,true); h.setUint32(14,crc,true); h.setUint32(18,data.length,true); h.setUint32(22,data.length,true);
+      h.setUint16(26,name.length,true); h.setUint16(28,0,true);
+      parts.push(new Uint8Array(h.buffer), name, data);
+      const c = new DataView(new ArrayBuffer(46));
+      c.setUint32(0,0x02014b50,true); c.setUint16(4,20,true); c.setUint16(6,20,true); c.setUint16(8,0x0800,true); c.setUint16(10,0,true);
+      c.setUint16(12,time,true); c.setUint16(14,date,true); c.setUint32(16,crc,true); c.setUint32(20,data.length,true); c.setUint32(24,data.length,true);
+      c.setUint16(28,name.length,true); c.setUint32(38,0,true); c.setUint32(42,off,true);
+      cen.push(new Uint8Array(c.buffer), name);
+      off += 30 + name.length + data.length;
+    }
+    const size = cen.reduce((a,b)=>a+b.length,0), e = new DataView(new ArrayBuffer(22));
+    e.setUint32(0,0x06054b50,true); e.setUint16(8,files.length,true); e.setUint16(10,files.length,true); e.setUint32(12,size,true); e.setUint32(16,off,true);
+    return new Blob([...parts, ...cen, new Uint8Array(e.buffer)], {type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+  }
+  const ncol = rows => Math.max(1, ...rows.map(r=>r.length));
+  function sheetXml(rows){
+    const nc = ncol(rows);
+    const widths = Array.from({length:nc}, (_,j)=>{ let w=6; for (let i=0;i<Math.min(rows.length,400);i++){ const v=rows[i][j]; if (v==null) continue; const L = String(v).length; if (L>w) w=L; } return Math.min(w+2, 60); });
+    let out = HEAD + `<worksheet xmlns="${NS}spreadsheetml/2006/main" xmlns:r="${NS}officeDocument/2006/relationships">`;
+    out += '<sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><sheetFormatPr defaultRowHeight="15"/>';
+    out += '<cols>' + widths.map((w,j)=>`<col min="${j+1}" max="${j+1}" width="${w}" customWidth="1"/>`).join("") + '</cols><sheetData>';
+    const buf = [];
+    rows.forEach((r,i)=>{
+      let row = `<row r="${i+1}">`;
+      r.forEach((v,j)=>{
+        if (v==null || v==="") return;
+        const ref = col(j)+(i+1), st = i===0 ? ' s="1"' : '';
+        if (typeof v === "number"){ if (isFinite(v)) row += `<c r="${ref}"${st}><v>${v}</v></c>`; }
+        else row += `<c r="${ref}" t="inlineStr"${st}><is><t xml:space="preserve">${x(v)}</t></is></c>`;
+      });
+      buf.push(row + '</row>');
+    });
+    out += buf.join("") + '</sheetData>';
+    if (rows.length>1) out += `<autoFilter ref="A1:${col(nc-1)}${rows.length}"/>`;
+    return out + '</worksheet>';
+  }
+  function build(sheets, title){
+    const now = new Date().toISOString().replace(/\.\d+Z$/,"Z");
+    const fdb = sheets.map((sh,i)=> sh.rows.length>1 ? `<definedName name="_xlnm._FilterDatabase" localSheetId="${i}" hidden="1">'${x(sh.name)}'!$A$1:$${col(ncol(sh.rows)-1)}$${sh.rows.length}</definedName>` : "").join("");
+    const files = [
+      {name:"[Content_Types].xml", data: HEAD + `<Types xmlns="${NS}package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>` + sheets.map((_,i)=>`<Override PartName="/xl/worksheets/sheet${i+1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join("") + `<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/><Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/></Types>`},
+      {name:"_rels/.rels", data: HEAD + `<Relationships xmlns="${NS}package/2006/relationships"><Relationship Id="rId1" Type="${NS}officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/><Relationship Id="rId2" Type="${NS}package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/><Relationship Id="rId3" Type="${NS}officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/></Relationships>`},
+      {name:"docProps/core.xml", data: HEAD + `<cp:coreProperties xmlns:cp="${NS}package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:dcmitype="http://purl.org/dc/dcmitype/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><dc:title>${x(title)}</dc:title><dc:creator>Adaptive Cumulative DVH · Designed by MPE Ali Eid</dc:creator><dcterms:created xsi:type="dcterms:W3CDTF">${now}</dcterms:created><dcterms:modified xsi:type="dcterms:W3CDTF">${now}</dcterms:modified></cp:coreProperties>`},
+      {name:"docProps/app.xml", data: HEAD + `<Properties xmlns="${NS}officeDocument/2006/extended-properties"><Application>Adaptive Cumulative DVH</Application></Properties>`},
+      {name:"xl/workbook.xml", data: HEAD + `<workbook xmlns="${NS}spreadsheetml/2006/main" xmlns:r="${NS}officeDocument/2006/relationships"><bookViews><workbookView/></bookViews><sheets>` + sheets.map((sh,i)=>`<sheet name="${x(sh.name)}" sheetId="${i+1}" r:id="rId${i+1}"/>`).join("") + `</sheets>` + (fdb?`<definedNames>${fdb}</definedNames>`:"") + `</workbook>`},
+      {name:"xl/_rels/workbook.xml.rels", data: HEAD + `<Relationships xmlns="${NS}package/2006/relationships">` + sheets.map((_,i)=>`<Relationship Id="rId${i+1}" Type="${NS}officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i+1}.xml"/>`).join("") + `<Relationship Id="rId${sheets.length+1}" Type="${NS}officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`},
+      {name:"xl/styles.xml", data: STYLES},
+      ...sheets.map((sh,i)=>({name:`xl/worksheets/sheet${i+1}.xml`, data: sheetXml(sh.rows)}))
+    ];
+    return zip(files);
+  }
+  return {build};
+})();
+
+/* ================= Case archive (IndexedDB on this computer; memory if the view blocks storage) ================= */
+const Archive = (() => {
+  let db = null, mode = "memory"; const mem = new Map();
+  const req = r => new Promise((res, rej) => { r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+  async function open(){
+    try {
+      db = await new Promise((res, rej) => {
+        const r = indexedDB.open("acd-archive", 1);
+        r.onupgradeneeded = () => { if (!r.result.objectStoreNames.contains("cases")) r.result.createObjectStore("cases", {keyPath:"id"}); };
+        r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); r.onblocked = () => rej(new Error("blocked"));
+      });
+      mode = "indexeddb";
+      try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch(_){}
+    } catch(_){ db = null; mode = "memory"; }
+  }
+  const store = m => db.transaction("cases", m).objectStore("cases");
+  const done = t => new Promise((res, rej) => { t.oncomplete = () => res(); t.onerror = () => rej(t.error); t.onabort = () => rej(t.error); });
+  async function all(){ return db ? req(store("readonly").getAll()) : [...mem.values()]; }
+  async function put(c){ if (!db){ mem.set(c.id, c); return; } const os = store("readwrite"); os.put(c); await done(os.transaction); }
+  async function del(id){ if (!db){ mem.delete(id); return; } const os = store("readwrite"); os.delete(id); await done(os.transaction); }
+  async function clear(){ if (!db){ mem.clear(); return; } const os = store("readwrite"); os.clear(); await done(os.transaction); }
+  return {open, all, put, del, clear, get mode(){ return mode; }};
+})();
+let ARCH = [];
+const METHODS = [["ref","Reference"],["cum","Cumulative"],["rig","Rigid"],["def","Deformable"]];
+const STW = {p:"Met", m:"Minor", f:"Fail", n:"NA"};
+const num = v => (v==null || !isFinite(v)) ? null : Math.round(v*1e6)/1e6;
+const r4 = v => (v==null || !isFinite(v)) ? null : Math.round(v*1e4)/1e4;
+const dlt = (a,b) => (a==null || b==null) ? null : r4(a-b);
+const pad2 = v => String(v).padStart(2,"0");
+const fmtStamp = iso => { const d = new Date(iso); return isNaN(d) ? "" : `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`; };
+const plainText = html => { const el = document.createElement("div"); el.innerHTML = html; return el.textContent; };
+function currentPid(){ const d = [S.ref, ...FX(), S.rigid, S.def].find(v=>v && v.pid); return d ? d.pid : ""; }
+function vcount(c, m){ const k = {p:0,m:0,f:0,n:0}; (c.rows||[]).forEach(r=>{ const s = r.st && r.st[m]; k[s in k ? s : "n"]++; }); return k; }
+function unitText(c){
+  const u = c.doseUnits; if (!u) return "";
+  const out = [];
+  if (u.ref && u.ref!=="Gy") out.push(`Reference: ${u.ref}`);
+  (u.fx||[]).forEach((v,i)=>{ if (v && v!=="Gy") out.push(`Fx${i+1}: ${v}`); });
+  if (u.rigid && u.rigid!=="Gy") out.push(`Rigid: ${u.rigid}`);
+  if (u.def && u.def!=="Gy") out.push(`Deformable: ${u.def}`);
+  return out.length ? out.join("; ") : "All Gy";
+}
+/* Cases archived before v1.5 that carried a dose-unit problem: a relative-dose export rescaled approximately ("auto"),
+   or a file whose target was far from the prescription and went into the values as it was. */
+const oldAuto = c => !!(c.corr && (((c.corr.fx||[]).some(f=>f && f.auto)) || (c.corr.rigid && c.corr.rigid.auto)));
+const oldUnits = c => !c.doseUnits && !!((c.corr && (((c.corr.fx||[]).some(f=>f && f.mode==="flagged")) || (c.corr.rigid && c.corr.rigid.mode==="flagged"))) || (c.checks||[]).some(t=>/Gy prescription\. Check this export/.test(t)));
+const needsResave = c => oldAuto(c) || oldUnits(c);
+const resaveText = c => !needsResave(c) ? "" : oldUnits(c) ? "yes: archived before v1.5 with a file whose dose did not match the prescription (units not converted)" : "yes: archived before v1.5 with an approximate rescale of a relative-dose export";
+function corrText(c){
+  const out = [];
+  ((c.corr && c.corr.fx) || []).forEach((f,i)=>{ if (!f) return; out.push(f.mode==="rescale" ? `Fx${i+1} rescaled ×${f.k}${f.auto?" (auto)":""}` : f.mode==="exclude" ? `Fx${i+1} excluded` : `Fx${i+1} flagged, not corrected`); });
+  const r = c.corr && c.corr.rigid; if (r) out.push(r.mode==="rescale" ? `Rigid rescaled ×${r.k}${r.auto?" (auto)":""}` : "Rigid flagged, not corrected");
+  return out.join("; ");
+}
+const MET = [
+  {k:"Dmean", u:"Gy", con:{t:"M"}}, {k:"D0.035cc", u:"Gy", con:{t:"D", vol:0.035, vu:"cc"}},
+  {k:"D2%", u:"Gy", con:{t:"D", vol:2, vu:"%"}}, {k:"D50%", u:"Gy", con:{t:"D", vol:50, vu:"%"}}, {k:"D98%", u:"Gy", con:{t:"D", vol:98, vu:"%"}}
+];
+function structMetrics(){
+  const fx = FX(), out = [], inc = fx.map((d,i)=> !!d && !S.K.excl[i]), nInc = inc.filter(Boolean).length, all5 = fx.every(Boolean);
+  for (const st of site().structures){
+    const name = S.map[st.key]; if (!name) continue;
+    const tvR = refTV(st.key), cv = ds => findCurve(doseSet(ds), name);
+    const one = (ds, con, sc) => num(evalC(cv(ds), con, sc, tvR)), H = S.K.hold;
+    const fvol = fx.map((d,i)=> inc[i] && cv(d) ? cv(d).tv : null).filter(v=>v!=null);
+    out.push({s:st.label, name, metric:"Volume", unit:"cc", ref:num(tvR), cum: fvol.length ? num(fvol.reduce((a,b)=>a+b,0)/fvol.length) : null, rig: cv(S.rigid) ? num(cv(S.rigid).tv) : null, def: cv(S.def) ? num(cv(S.def).tv) : null});
+    for (const m of MET){
+      const vals = fx.map((d,i)=> inc[i] && !H.fx[i] ? one(d, m.con, fxScale(i)) : null).filter(v=>v!=null);
+      const cum = all5 && nInc>0 && vals.length===nInc ? num(vals.reduce((a,b)=>a+b,0)/nInc) : null;
+      out.push({s:st.label, name, metric:m.k, unit:m.u, ref:H.ref?null:one(S.ref,m.con,uk("ref")), cum, rig:H.rig?null:one(S.rigid,m.con,kRig()), def:H.def?null:one(S.def,m.con,uk("def"))});
+    }
+  }
+  return out;
+}
+function snapshot(label, notes){
+  const rows = compute(), fx = FX();
+  const ds0 = d => d ? d.doses[Math.min(d.sel||0, d.doses.length-1)].label : "";
+  return {
+    format:1, id: "c" + Date.now().toString(36) + Math.random().toString(36).slice(2,8), savedAt: new Date().toISOString(), appVersion: APP_VERSION,
+    site:S.site, siteLabel:site().label, rx:S.rx, n:S.n, label, notes, pid: currentPid(),
+    files:{ref:S.ref?S.ref.fileName:"", fx:fx.map(d=>d?d.fileName:""), rigid:S.rigid?S.rigid.fileName:"", def:S.def?S.def.fileName:""},
+    plans:{ref:S.ref?S.ref.plan:"", fx:fx.map(d=>d?d.plan:""), rigid:S.rigid?S.rigid.plan:"", def:ds0(S.def)},
+    sources:{ref:S.ref?S.ref.kind:"", rigid:S.rigid?S.rigid.kind:"", def:S.def?S.def.kind:""},
+    fxType: fx.map((d,i)=> d ? (typeScale(i)!==1 ? "single fraction" : "plan total") : ""),
+    corr:{
+      fx: fx.map((d,i)=>{ const f = S.K.fxInfo[i]; if (!d || !f) return null; return f.mode==="rescale" ? {mode:"rescale", k:+f.k.toFixed(4), auto:!!f.auto} : f.mode==="exclude" ? {mode:"exclude"} : {mode:"flagged"}; }),
+      rigid: S.K.rigInfo ? (S.K.rigInfo.mode==="rescale" ? {mode:"rescale", k:+S.K.rigInfo.k.toFixed(4), auto:!!S.K.rigInfo.auto} : {mode:"flagged"}) : null
+    },
+    map: Object.assign({}, S.map),
+    doseUnits: (() => { const lab = slot => { const ds = dsOf(slot); if (!ds) return ""; const du = ds.dose || {}; return du.unit==="%" ? `% of ${du.base} Gy, converted` : uk(slot)!==1 ? `% of ${S.rx} Gy, set by hand` : du.unit==="?" ? "unclear" : "Gy"; };
+      return {ref:lab("ref"), fx:fx.map((d,i)=>lab("fx"+i)), rigid:lab("rigid"), def:lab("def")}; })(),
+    set: {edited: !!CUSTOM[S.site], sources: [...new Set(site().constraints.map(c=>c.src).filter(Boolean))].map(srcText)},
+    fxAdapt: fx.map((d,i)=> d ? adaptOf(i).v : ""), fxAdaptAuto: fx.map((d,i)=> !!d && adaptOf(i).auto), fxSeries: fx.map((d,i)=> d ? seriesOf(i).v : ""),
+    checks: checks(rows).filter(c=>c[0]==="e" || c[0]==="w").map(c=>plainText(c[1])),
+    rows: rows.map(r=>({s:labelOf(r.con.s), src:srcText(r.con.src), name:r.name||"", goal:goalPlain(r.con), unit:unitOf(r.con).replace("cm³","cc"), t:r.con.t, op:r.con.op, lim:r.con.lim, tol:r.con.tol||0,
+      ref:num(r.ref), fx:r.fxT.map((v,i)=> S.K.excl[i] ? null : num(v)), excl:FX().map((_,i)=>!!S.K.excl[i]), cum:num(r.cum), rig:num(r.rig), def:num(r.def),
+      st:{ref:status(r.con,r.ref), cum:status(r.con,r.cum), rig:status(r.con,r.rig), def:status(r.con,r.def)} })),
+    metrics: structMetrics()
+  };
+}
+async function refreshArchive(){
+  try { ARCH = (await Archive.all()).filter(c=>c && c.id && Array.isArray(c.rows)).sort((a,b)=>String(a.savedAt).localeCompare(String(b.savedAt))); }
+  catch(_){ ARCH = []; }
+  renderArchive();
+}
+function saveMsg(html){ $("saveMsg").innerHTML = html; }
+async function saveCase(mode){
+  if (S.demo){ saveMsg(`<span class="warn">Load a real case before saving; the demo is not archived.</span>`); return; }
+  if (!S.ref && !FX().some(Boolean)){ saveMsg(`<span class="warn">Nothing is loaded yet.</span>`); return; }
+  const label = $("caseLabel").value.trim() || currentPid() || `Case ${ARCH.length+1}`;
+  const rec = snapshot(label, $("caseNotes").value.trim());
+  const dups = ARCH.filter(c => c.site===rec.site && (rec.pid ? c.pid===rec.pid : c.label===rec.label));
+  const dup = dups.find(needsResave) || dups[0];      // a case marked "re-save" is the one to replace
+  if (dup && !mode){
+    saveMsg(`<span class="warn">${esc(rec.pid ? "Patient "+rec.pid : "“"+label+"”")} is already in the archive (${esc(dup.siteLabel||dup.site)}, saved ${esc(fmtStamp(dup.savedAt))}).</span>
+      <button class="btn sm" data-save="replace">Replace it</button><button class="btn ghost sm" data-save="new">Save as another case</button><button class="x" data-save="cancel">Cancel</button>`);
+    return;
+  }
+  if (mode==="replace" && dup){ rec.id = dup.id; rec.firstSaved = dup.firstSaved || dup.savedAt; }
+  try { await Archive.put(rec); } catch(e){ saveMsg(`<span class="warn">Could not save: ${esc(e && e.message || e)}</span>`); return; }
+  await refreshArchive();
+  const missing = [!S.ref && "reference plan", FX().filter(Boolean).length<S.n && "some fractions", !S.rigid && "rigid sum", !S.def && "deformable sum"].filter(Boolean);
+  const probs = rec.checks.length;
+  saveMsg(`<span class="ok">✓ ${mode==="replace" ? "Updated" : "Saved"} “${esc(label)}”</span><span>${esc(rec.siteLabel)} · case ${ARCH.findIndex(c=>c.id===rec.id)+1} of ${ARCH.length}</span>` +
+    (missing.length ? `<span class="warn">Saved without: ${missing.join(", ")}.</span>` : "") +
+    (probs ? `<span class="warn">${probs} data-check note${probs===1?"":"s"} stored with it.</span>` : ""));
+}
+async function removeCase(btn){
+  if (!btn.dataset.armed){ btn.dataset.armed = "1"; btn.textContent = "Confirm remove"; setTimeout(()=>{ if (btn.isConnected){ delete btn.dataset.armed; btn.textContent = "Remove"; } }, 4000); return; }
+  await Archive.del(btn.dataset.del); await refreshArchive(); toast("Case removed.");
+}
+function askClearAll(){ $("archFoot").innerHTML = `<span class="warn" style="color:var(--fail)">Delete all ${ARCH.length} cases from this computer? This cannot be undone; back up first if unsure.</span><span><button class="btn sm" id="clearArchYes" style="background:var(--fail);border-color:var(--fail)">Delete all</button> <button class="x" id="clearArchNo">Cancel</button></span>`; }
+async function clearArchive(){ await Archive.clear(); await refreshArchive(); toast("Archive cleared."); }
+function renderArchive(){
+  const n = ARCH.length, link = $("archLink"); if (link) link.textContent = `Archive · ${n}`;
+  const bySite = new Map(); ARCH.forEach(c=>{ const k = c.siteLabel||c.site; bySite.set(k, (bySite.get(k)||0)+1); });
+  $("archCount").textContent = n ? `${n} case${n===1?"":"s"} · ` + [...bySite].map(([k,v])=>`${k} ${v}`).join(" · ") : "No cases archived";
+  ["expXlsx","expCsv","backup"].forEach(id => $(id).disabled = !n);
+  const vc = (c,m) => { const k = vcount(c,m); return (k.p+k.m+k.f) ? `<span class="st-p">${k.p}</span>·<span class="st-m">${k.m}</span>·<span class="st-f">${k.f}</span>` : `<span style="color:var(--na)">—</span>`; };
+  $("archTable").innerHTML = !n
+    ? `<tbody><tr><td class="empty">No cases yet. Load a case, review it, then use <b>Save case to archive</b>. Saved cases stay in this program on this computer until you remove them.</td></tr></tbody>`
+    : `<thead><tr><th>#</th><th class="l">Case</th><th class="l">Patient ID</th><th class="l">Site</th><th class="l">Saved</th><th>Reference<div class="hn2">met·minor·fail</div></th><th>Cumulative<div class="hn2">met·minor·fail</div></th><th>Rigid<div class="hn2">met·minor·fail</div></th><th>Deformable<div class="hn2">met·minor·fail</div></th><th class="l">Dose units · corrections</th><th class="l">Notes</th><th></th></tr></thead><tbody>` +
+      ARCH.map((c,i)=>`<tr><td>${i+1}</td><td class="l">${esc(c.label||"")}</td><td class="l">${esc(c.pid||"")}</td><td class="l">${esc(c.siteLabel||c.site)}</td><td class="l">${esc(fmtStamp(c.savedAt))}</td><td class="vc">${vc(c,"ref")}</td><td class="vc">${vc(c,"cum")}</td><td class="vc">${vc(c,"rig")}</td><td class="vc">${vc(c,"def")}</td><td class="nt">${esc([unitText(c)==="All Gy" ? "" : unitText(c), corrText(c)].filter(Boolean).join("; ")||"—")}${needsResave(c)?` <span class="chip ${oldUnits(c)?"err":"warn"}" title="${oldUnits(c)?"Archived before v1.5 with a file whose dose did not match the prescription; its values may be in % of the prescription.":"Archived before v1.5 with an approximate rescale."} Reload this case's files and use Replace for exact values.">re-save</span>`:""}</td><td class="nt">${esc(c.notes||"")}</td><td><button class="x" data-del="${esc(c.id)}">Remove</button></td></tr>`).join("") + `</tbody>`;
+  const stale = ARCH.filter(needsResave).length, gross = ARCH.filter(oldUnits).length;
+  $("archFoot").innerHTML = `<span>${stale ? `<b style="color:var(--${gross?"fail":"minor"})">${stale} case${stale===1?"":"s"} marked “re-save”</b> ${stale===1?"was":"were"} archived before v1.5 with a relative-dose export in ${stale===1?"it":"them"}: rescaled approximately (up to about 0.6% low for that fraction)${gross?`, or, for ${gross} of them, left unconverted, so doses may read near 95–100 “Gy”`:""}. Reload ${stale===1?"its":"their"} files and choose Replace for exact values. Until then ${stale===1?"it is":"they are"} flagged in the exports and left out of the Summary sheet. ` : ""}${Archive.mode==="indexeddb" ? "Stored in this program on this computer. Back it up regularly; restoring a backup adds the cases that are not already here." : "This view cannot keep data, so the archive is lost when the page closes. Use the desktop program or the website version to keep an archive."}</span>${n ? `<span><button class="x" id="clearArch">Delete all cases…</button></span>` : ""}`;
+}
+function stats(vals){
+  const v = vals.filter(x=>x!=null && isFinite(x)), n = v.length; if (!n) return {n:0};
+  const mean = v.reduce((a,b)=>a+b,0)/n, sd = n>1 ? Math.sqrt(v.reduce((a,b)=>a+(b-mean)**2,0)/(n-1)) : null;
+  const q = [...v].sort((a,b)=>a-b), med = n%2 ? q[(n-1)/2] : (q[n/2-1]+q[n/2])/2;
+  return {n, mean, sd, med, min:q[0], max:q[n-1]};
+}
+function exportTables(anon){
+  const list = ARCH.slice(), cname = list.map((c,i)=> anon ? "C"+String(i+1).padStart(3,"0") : (c.label || c.pid || "C"+String(i+1).padStart(3,"0")));
+  const maxN = Math.max(1, ...list.map(c=>c.n||0)), site_ = c => c.siteLabel || c.site;
+  const groups = new Map(); list.forEach(c=>{ if (!groups.has(c.site)) groups.set(c.site, []); groups.get(c.site).push(c); });
+  const nStale = list.filter(needsResave).length, rs_ = c => needsResave(c) ? "yes" : "";
+  // Cases
+  const fxAd = Array.from({length:maxN},(_,j)=>[`Fx${j+1} adaptation`,`Fx${j+1} series`]).flat();
+  const cases = [["Case", ...(anon?[]:["Patient ID","Label"]), "Site","Prescription (Gy)","Fractions","Saved","Fraction exports","Dose units read","Corrections","Re-save","Deformable dose set","Constraint set","ATP fractions","ATS fractions",...fxAd,
+    ...METHODS.flatMap(([,l])=>[`${l} met`,`${l} minor`,`${l} fail`]), "Data-check notes","Notes", ...(anon?[]:["Reference file","Fraction files","Rigid file","Deformable file"])]];
+  list.forEach((c,i)=>{ const k = METHODS.map(([m])=>vcount(c,m));
+    const ada = c.fxAdapt || [], ser = c.fxSeries || [];
+    cases.push([cname[i], ...(anon?[]:[c.pid||"", c.label||""]), site_(c), c.rx, c.n, fmtStamp(c.savedAt), (c.fxType||[]).join(", "), unitText(c), corrText(c), resaveText(c), (c.plans&&c.plans.def)||"",
+      c.set ? (c.set.edited ? "Edited on this computer" : "Published defaults") : "", ada.filter(v=>v==="ATP").length, ada.filter(v=>v==="ATS").length,
+      ...Array.from({length:maxN},(_,j)=>[ada[j]||"", ser[j]||""]).flat(),
+      ...k.flatMap(x=>[x.p,x.m,x.f]), (c.checks||[]).join(" | "), c.notes||"", ...(anon?[]:[c.files.ref, (c.files.fx||[]).join(", "), c.files.rigid, c.files.def])]); });
+  // Constraints (wide) + Long
+  const cons = [["Case","Site","Structure","Mapped as","Constraint","Unit","Goal","Limit","Tolerance","Reference",...Array.from({length:maxN},(_,j)=>`Fx${j+1} (plan total)`),"Cumulative","Rigid","Deformable",
+    "Δ Cumulative−Reference","Δ Rigid−Reference","Δ Deformable−Reference","Δ Cumulative−Deformable","Δ Rigid−Deformable","Status Reference","Status Cumulative","Status Rigid","Status Deformable","Corrections","Source","Re-save"]];
+  const long = [["Case","Site","Category","Structure","Item","Unit","Method","Value","Status","Adaptation","Series","Re-save"]];
+  list.forEach((c,i)=>{ const ct = corrText(c);
+    c.rows.forEach(r=>{
+      cons.push([cname[i], site_(c), r.s, r.name, r.goal, r.unit, r.op==="<="?"≤":"≥", r.lim, r.tol||null, r4(r.ref), ...Array.from({length:maxN},(_,j)=> r4(r.fx ? r.fx[j] : null)),
+        r4(r.cum), r4(r.rig), r4(r.def), dlt(r.cum,r.ref), dlt(r.rig,r.ref), dlt(r.def,r.ref), dlt(r.cum,r.def), dlt(r.rig,r.def), STW[r.st.ref], STW[r.st.cum], STW[r.st.rig], STW[r.st.def], ct, r.src||"", rs_(c)]);
+      const L = (meth, v, st, ad, se) => long.push([cname[i], site_(c), "Constraint", r.s, r.goal, r.unit, meth, r4(v), st, ad||"", se||"", rs_(c)]);
+      L("Reference", r.ref, STW[r.st.ref]);
+      (r.fx||[]).forEach((v,j)=>{ if (!(r.excl && r.excl[j]) && v!=null) L(`Fx${j+1}`, v, STW[status(r, v)], (c.fxAdapt||[])[j], (c.fxSeries||[])[j]); });
+      L("Cumulative", r.cum, STW[r.st.cum]); L("Rigid", r.rig, STW[r.st.rig]); L("Deformable", r.def, STW[r.st.def]);
+    });
+  });
+  // Structure metrics
+  const met = [["Case","Site","Structure","Mapped as","Metric","Unit","Reference","Cumulative","Rigid","Deformable","Δ Cumulative−Reference","Δ Rigid−Reference","Δ Deformable−Reference","Δ Cumulative−Deformable","Δ Rigid−Deformable","Re-save"]];
+  list.forEach((c,i)=> (c.metrics||[]).forEach(m=>{
+    met.push([cname[i], site_(c), m.s, m.name, m.metric, m.unit, r4(m.ref), r4(m.cum), r4(m.rig), r4(m.def), dlt(m.cum,m.ref), dlt(m.rig,m.ref), dlt(m.def,m.ref), dlt(m.cum,m.def), dlt(m.rig,m.def), rs_(c)]);
+    METHODS.forEach(([k,l])=>{ if (m[k]!=null) long.push([cname[i], site_(c), "Structure metric", m.s, m.metric, m.unit, l, r4(m[k]), null, "", "", rs_(c)]); });
+  }));
+  // Summary
+  const sum = [["Site","Structure","Constraint","Unit","Method","N","Mean","SD","Median","Min","Max","Met","Minor","Fail","Met %","N paired vs Reference","Mean Δ vs Reference","SD Δ vs Reference","N paired vs Deformable","Mean Δ vs Deformable","SD Δ vs Deformable"]];
+  for (const [, cs0] of groups){
+    const cs = cs0.filter(c=>!needsResave(c)); if (!cs.length) continue;
+    const order = [], by = new Map();
+    cs.forEach(c=>c.rows.forEach(r=>{ const k = r.s+"|"+r.goal; if (!by.has(k)){ by.set(k,[]); order.push(k); } by.get(k).push(r); }));
+    for (const k of order){
+      const rs = by.get(k), r0 = rs[0];
+      if (!rs.some(r=>METHODS.some(([m])=>r[m]!=null))) continue;   // no data for this constraint in any case
+      for (const [m,l] of METHODS){
+        const st = stats(rs.map(r=>r[m])), cnt = {p:0,m:0,f:0}; rs.forEach(r=>{ const x = r.st[m]; if (x in cnt) cnt[x]++; });
+        const ev = cnt.p+cnt.m+cnt.f;
+        const dR = m==="ref" ? null : stats(rs.filter(r=>r[m]!=null && r.ref!=null).map(r=>r[m]-r.ref));
+        const dD = m==="def" ? null : stats(rs.filter(r=>r[m]!=null && r.def!=null).map(r=>r[m]-r.def));
+        sum.push([site_(cs[0]), r0.s, r0.goal, r0.unit, l, st.n, r4(st.mean), r4(st.sd), r4(st.med), r4(st.min), r4(st.max), cnt.p, cnt.m, cnt.f, ev ? r4(cnt.p/ev*100) : null,
+          dR ? dR.n : null, dR ? r4(dR.mean) : null, dR ? r4(dR.sd) : null, dD ? dD.n : null, dD ? r4(dD.mean) : null, dD ? r4(dD.sd) : null]);
+      }
+    }
+  }
+  const readme = [["Item","Detail"],
+    ["Exported", fmtStamp(new Date().toISOString())],
+    ["Program", `Adaptive Cumulative DVH v${APP_VERSION} · Designed by MPE Ali Eid`],
+    ["Cases", `${list.length} (` + [...groups].map(([,cs])=>`${site_(cs[0])} ${cs.length}`).join(", ") + ")"],
+    ["Patient identifiers", anon ? "Anonymised: cases numbered C001, C002… in order of saving; patient IDs, labels and file names left out. Notes are exported as typed." : "Included: Patient ID, Label and file names."],
+    ["Cumulative", "DVH-parameter summation of the delivered fractions. Dose metrics (Dx, D100%, Dmean) = Σ(plan-total value ÷ n); volume metrics = mean of the fraction values at the same threshold. An excluded fraction is replaced by the mean of the others."],
+    ["Rigid", "Rigid accumulation on the reference CT as loaded: Monaco plan sum of the fractions, or a RayStation rigid sum."],
+    ["Deformable", "All fraction doses deformed to the reference CT in RayStation (ANACONDA) and summed. Its % volumes are converted to cm³ with the reference CT structure volume."],
+    ["Dose units", "Monaco exports made with the DVH in relative dose hold % of the prescription under a header that says Gy. From v1.5 the app detects this from the dose-bin grid and converts exactly (Cases › Dose units read)."],
+    ["Corrections", "By hand only: a fraction rescaled to the others or excluded, or the rigid sum rescaled to the cumulative."],
+    ["Re-save", (nStale ? `${nStale} of the ${list.length} cases ${nStale===1?"is":"are"} marked Re-save = yes and left out of the Summary sheet. ` : "No case is marked. ") + "A marked case was archived before v1.5 with a relative-dose export in it: either rescaled automatically ('auto' in Corrections, up to about 0.6% low for that fraction) or left unconverted ('flagged', doses may read near 95–100 Gy). Reload its files in the app and replace the archived case."],
+    ["Fraction columns", "Plan-total values: each adapted plan as if all fractions matched that day. Blank = not loaded or excluded (see Corrections)."],
+    ["Adaptation", "Per fraction: ATP (adapt to position) or ATS (adapt to shape) and the MR series, as tagged in the app (suggested from contour volumes and the rigid-sum plan name unless set by hand). In Cases and in the Long sheet's fraction rows."],
+    ["Constraint sources", "Prostate and liver: department Monaco templates. Other sites: AAPM TG-101 (5 fractions), HyTEC spinal cord, UK 2022 SABR consensus lung V20Gy, SMART trial GI V33Gy, unless edited (see Cases › Constraint set and Constraints › Source)."],
+    ["Status", "Met = goal satisfied; Minor = outside the goal but within the bracketed tolerance; Fail = beyond it; NA = not evaluated."],
+    ["Δ columns", "First method minus second, in the constraint's unit. Summary Δ statistics use only cases where both values exist (paired); SD is the sample SD (n−1)."],
+    ["Sheets", "Summary · Cases · Constraints (one row per case and constraint) · Structure metrics (volume, Dmean, D0.035cc, D2%, D50%, D98% for each method) · Long (one row per value, for R, SPSS or Python)."]];
+  return {readme, sum, cases, cons, met, long};
+}
+const stampName = base => { const d = new Date(); return `${base} ${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`; };
+async function exportXlsx(){
+  if (!ARCH.length) return;
+  const t = exportTables($("anon").checked);
+  const blob = XLSX.build([{name:"Read me",rows:t.readme},{name:"Summary",rows:t.sum},{name:"Cases",rows:t.cases},{name:"Constraints",rows:t.cons},{name:"Structure metrics",rows:t.met},{name:"Long",rows:t.long}], "Adaptive Cumulative DVH archive");
+  await saveFile(stampName("Cumulative DVH archive") + ".xlsx", blob, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  const st = ARCH.filter(needsResave).length; if (st) toast(`${st} case${st===1?"":"s"} marked “re-save” ${st===1?"is":"are"} flagged in the file and left out of its Summary sheet.`);
+}
+async function exportCsv(){
+  if (!ARCH.length) return;
+  const t = exportTables($("anon").checked);
+  await saveFile(stampName("Cumulative DVH archive long") + ".csv", "\ufeff" + toCsv(t.long), "text/csv");
+}
+async function backupJson(){
+  if (!ARCH.length) return;
+  const obj = {app:"Adaptive Cumulative DVH", format:1, appVersion:APP_VERSION, exported:new Date().toISOString(), cases:ARCH};
+  await saveFile(stampName("Cumulative DVH archive backup") + ".json", JSON.stringify(obj), "application/json");
+}
+async function restoreJson(file){
+  let obj; try { obj = JSON.parse(await file.text()); } catch(_){ toast("That file is not a readable backup."); return; }
+  const list = Array.isArray(obj) ? obj : (obj && Array.isArray(obj.cases) ? obj.cases : null);
+  if (!list){ toast("No cases found in that file."); return; }
+  const have = new Set(ARCH.map(c=>c.id)); let added = 0, skipped = 0, bad = 0;
+  for (const c of list){
+    if (!c || typeof c.id!=="string" || !c.site || !Array.isArray(c.rows)){ bad++; continue; }
+    if (have.has(c.id)){ skipped++; continue; }
+    await Archive.put(c); have.add(c.id); added++;
+  }
+  await refreshArchive();
+  toast(`Restored ${added} case${added===1?"":"s"}` + (skipped ? `; ${skipped} already here` : "") + (bad ? `; ${bad} unreadable` : "") + ".");
+}
+
+/* ================= Events ================= */
+document.addEventListener("change", async e=>{
+  const t=e.target;
+  if (t.closest && t.closest("#editor")){ onEditorChange(t); return; }
+  if (t.id==="setImport"){ const f=t.files[0]; if (f) await importSet(f); t.value=""; return; }
+  if (t.matches('input[type=file][data-slot]')){ const f=t.files[0]; if(f){ await loadInto(t.dataset.slot,f); renderAll(); toast("Loaded "+f.name);} }
+  else if (t.id==="multi"){ await loadMany([...t.files]); t.value=""; }
+  else if (t.id==="restore"){ const f=t.files[0]; if (f) await restoreJson(f); t.value=""; }
+  else if (t.id==="anon"){ try { localStorage.setItem("acd.anon", t.checked?"1":"0"); } catch(_){} }
+  else if (t.matches("select[data-mode]")){ S.fxMode[+t.dataset.mode]=t.value; renderAll(); }
+  else if (t.matches("select[data-corr]")){ S.fxCorr[+t.dataset.corr]=t.value; renderAll(); }
+  else if (t.matches("select[data-rcorr]")){ S.rigCorr=t.value; renderAll(); }
+  else if (t.matches("select[data-unit]")){ if (t.dataset.unit==="ref") S.refUnit=t.value; else S.defUnit=t.value; renderAll(); }
+  else if (t.matches("select[data-dsel]")){ const k=t.dataset.dsel, d = k==="ref"?S.ref:k==="rigid"?S.rigid:k==="def"?S.def:S.fx[+k.slice(2)]; if (d){ d.sel=+t.value; renderAll(); } }
+  else if (t.matches("select[data-map]")){ S.map[t.dataset.map]=t.value; S.mapTouched[t.dataset.map]=true; renderAll(); }
+  else if (t.id==="plotStruct"){ S.plotStruct=t.value; renderPlot(); }
+  else if (t.matches("input[data-ser]")){ S.show[t.dataset.ser]=t.checked; renderPlot(); }
+  else if (t.id==="rx"){ const v=parseFloat(t.value); if(v>0){S.rx=v; renderAll();} }
+  else if (t.id==="nfx"){ const v=parseInt(t.value); if(v>=1&&v<=10){S.n=v; S.fx.length=Math.min(S.fx.length,v); renderAll();} }
+});
+document.addEventListener("click", e=>{
+  const t=e.target.closest("button"); if(!t) return;
+  if (t.dataset.adapt){ S.fxAdapt[+t.dataset.adapt] = t.dataset.v; renderAll(); return; }
+  if (t.dataset.pct){ const k = t.dataset.pct; if (k==="ref") S.refUnit="pct"; else if (k==="def") S.defUnit="pct"; else if (k==="rigid") S.rigCorr="pct"; else S.fxCorr[+k.slice(2)]="pct"; renderAll(); toast("Reading that file as % of the prescription."); return; }
+  if (t.dataset.setrx){ S.rx = +t.dataset.setrx; renderAll(); toast(`Prescription set to ${S.rx} Gy.`); return; }
+  if (t.dataset.cadd){ const key = t.dataset.cadd; editSite(ser => ser.constraints.push(Object.assign({s:key, src:""}, CDEF.D))); return; }
+  if (t.dataset.cdel){ const idx = +t.dataset.cdel; editSite(ser => ser.constraints.splice(idx,1)); return; }
+  if (t.dataset.orgdel){
+    if (!t.dataset.armed){ t.dataset.armed="1"; t.textContent="Confirm remove"; setTimeout(()=>{ if (t.isConnected){ delete t.dataset.armed; t.textContent="Remove organ"; } }, 4000); return; }
+    const key = t.dataset.orgdel; delete S.map[key];
+    editSite(ser => { ser.structures = ser.structures.filter(x=>x.key!==key); ser.constraints = ser.constraints.filter(c=>c.s!==key); }); return;
+  }
+  if (t.id==="orgAdd"){ editSite(ser => ser.structures.push({key:"u"+Date.now().toString(36), label:"New organ", target:false, optional:true, aliases:[], pats:[]})); return; }
+  if (t.id==="editToggle"){ S.editMode = !S.editMode; renderMap(); return; }
+  if (t.id==="setExport"){ exportSet(); return; }
+  if (t.id==="setReset"){
+    if (!CUSTOM[S.site]){ toast(`${site().label} already uses the published defaults.`); return; }
+    if (!t.dataset.armed){ t.dataset.armed="1"; t.textContent=`Click again to reset ${site().label}`; setTimeout(()=>{ if (t.isConnected){ delete t.dataset.armed; t.textContent="Reset to defaults…"; } }, 4000); return; }
+    delete t.dataset.armed; t.textContent="Reset to defaults…";
+    delete CUSTOM[S.site]; saveSets(); rebuildSites(); S.mapTouched = {}; S.rx = site().rx; S.n = site().n; renderAll(); toast(`${site().label} reset to the published defaults.`); return;
+  }
+  if (t.dataset.clear){ const s=t.dataset.clear; if(s==="ref")S.ref=null; else if(s==="rigid")S.rigid=null; else if(s==="def")S.def=null; else S.fx[+s.slice(2)]=null; resetSlot(s); renderAll(); }
+  else if (t.id==="clearDemo") clearAll();
+  else if (t.closest("#sites") && t.dataset.k && SITES[t.dataset.k].ready){ S.site=t.dataset.k; S.rx=site().rx; S.n=site().n; S.mapTouched={}; S.plotStruct=null; if (S.demo) demo(); renderAll(); }
+  else if (t.closest("#segFx")){ S.fxView=t.dataset.v; [...t.parentNode.children].forEach(b=>b.setAttribute("aria-pressed",b===t)); renderTable(compute()); }
+  else if (t.closest("#segBase")){ S.base=t.dataset.v; [...t.parentNode.children].forEach(b=>b.setAttribute("aria-pressed",b===t)); renderTable(compute()); }
+  else if (t.id==="copyTsv"){
+    const txt = tableRows().map(r=>r.join("\t")).join("\n");
+    const fb = $("copyFallback");
+    try { navigator.clipboard.writeText(txt).then(()=>{toast("Table copied. Paste into Excel.");fb.hidden=true;}, ()=>{fb.hidden=false;fb.value=txt;fb.select();toast("Copy blocked here. Select the text below and copy it.");}); }
+    catch(_){ fb.hidden=false; fb.value=txt; fb.select(); }
+  }
+  else if (t.id==="dlCsv"){
+    const csv = toCsv(tableRows());
+    saveFile(`cumulative_dvh_${S.site}.csv`, "\ufeff"+csv, "text/csv");
+  }
+  else if (t.id==="archLink"){ $("archive").scrollIntoView({behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block:"start"}); }
+  else if (t.id==="saveCase") saveCase();
+  else if (t.dataset.save){ const k=t.dataset.save; if (k==="cancel") $("saveMsg").innerHTML=""; else saveCase(k); }
+  else if (t.id==="expXlsx") exportXlsx();
+  else if (t.id==="expCsv") exportCsv();
+  else if (t.id==="backup") backupJson();
+  else if (t.dataset.del) removeCase(t);
+  else if (t.id==="clearArch") askClearAll();
+  else if (t.id==="clearArchYes") clearArchive();
+  else if (t.id==="clearArchNo") renderArchive();
+  else if (t.id==="printBtn") window.print();
+});
+$("caseLabel").addEventListener("input", ()=>{ S.labelAuto = false; });
+document.addEventListener("input", e=>{ const t = e.target; if (t.matches && t.matches("input[data-series]")){ S.fxSeries[+t.dataset.series] = t.value.trim(); renderTable(compute()); } });
+const drop=$("drop");
+["dragenter","dragover"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add("over");}));
+["dragleave","drop"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove("over");}));
+drop.addEventListener("drop", e=>{ const fs=[...e.dataTransfer.files]; if(fs.length) loadMany(fs); });
+let topLevel = true; try { topLevel = window.self===window.top; } catch(_){ topLevel=false; }
+$("printBtn").hidden = !topLevel;
+
+try { const a = localStorage.getItem("acd.anon"); if (a!==null) $("anon").checked = a==="1"; } catch(_){}
+demo(); renderAll();
+Archive.open().then(refreshArchive);
+</script>
+<script>
+if ("serviceWorker" in navigator && /^https?:$/.test(location.protocol)) {
+  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+}
+</script>
+</body>
+</html>
