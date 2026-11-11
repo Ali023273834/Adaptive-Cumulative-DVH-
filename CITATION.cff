@@ -1,0 +1,45 @@
+# Citation metadata for Adaptive Cumulative DVH.
+# GitHub shows it under "Cite this repository"; Zenodo reads it when it archives a release.
+cff-version: 1.2.0
+message: "If you use Adaptive Cumulative DVH, please cite it using the metadata from this file."
+type: software
+title: "Adaptive Cumulative DVH: cumulative dose evaluation for MR-Linac online adaptive radiotherapy"
+abstract: >-
+  Adaptive Cumulative DVH is a browser-based tool for evaluating the cumulative dose of
+  MR-Linac online adaptive stereotactic body radiotherapy. In this workflow each adapted
+  plan is calculated as a full course while only one fraction of it is delivered. The tool
+  reads the plan-total DVH export of every fraction, takes the delivered one-fraction share
+  of each, and sums the shares over the course (DVH-parameter summation). The cumulative
+  values are evaluated against site-specific dose constraints and compared with the
+  reference plan and with rigid and deformable dose accumulation. It reads Monaco and
+  RayStation DVH exports, covers prostate, liver, lung, pancreas, renal, adrenal, bone and
+  stomach treatments, records adapt-to-position or adapt-to-shape for each fraction, and
+  keeps a local case archive that can be exported for statistics. All files are processed
+  in the browser and nothing is uploaded. Intended for clinical physics review; results
+  should be verified against the treatment planning system before any decision.
+version: "1.5"
+date-released: "2026-11-11"
+# After the first Zenodo release: remove the "# " from the next line and put the
+# "Cite all versions" DOI from the Zenodo record in it.
+# doi: "10.5281/zenodo.XXXXXXXX"
+license: MIT
+url: "https://ali023273834.github.io/Adaptive-Cumulative-DVH-/"
+repository-code: "https://github.com/Ali023273834/Adaptive-Cumulative-DVH-"
+authors:
+  - family-names: "Eid"
+    given-names: "Ali"
+    orcid: "https://orcid.org/0009-0004-3878-7088"
+keywords:
+  - MR-Linac
+  - MR-guided radiotherapy
+  - online adaptive radiotherapy
+  - stereotactic body radiotherapy
+  - cumulative dose
+  - dose accumulation
+  - dose-volume histogram
+  - adapt-to-position
+  - adapt-to-shape
+  - Elekta Unity
+  - Monaco
+  - RayStation
+  - medical physics
